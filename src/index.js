@@ -83,6 +83,9 @@ export default {
       const schedule = buildDailySchedule(await dataWithChanges(env, changes), date);
 
       if (url.searchParams.get("format") === "text") {
+        if (llmEnabled(env) && !(await allowLlmCall(request, env))) {
+          return json({ error: "Too many requests. Wait a minute and try again." }, 429);
+        }
         const msgs = await Promise.all(schedule.routes.map((r) => driverMessage(r, date, env)));
         return new Response(msgs.map((m) => m.text).join("\n\n"), {
           headers: { "Content-Type": "text/plain; charset=utf-8" },

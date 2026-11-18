@@ -105,7 +105,7 @@ A change that covers several days becomes one entry per day.
 
 ${roster}`;
 
-  const { text: reply } = await chat(env, system, text.slice(0, MAX_TEXT_LENGTH), { maxTokens: 1000, temperature: 0 });
+  const { text: reply } = await chat(env, system, text.slice(0, MAX_TEXT_LENGTH), { maxTokens: 3000, temperature: 0 });
   let parsed;
   try {
     parsed = extractJson(reply);

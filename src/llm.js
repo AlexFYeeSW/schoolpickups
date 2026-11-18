@@ -56,7 +56,7 @@ function friendly(status, detail) {
   return `Nvidia returned an error (${status}).${d}`;
 }
 
-async function request(env, path, init = {}) {
+async function request(env, path, { timeoutMs = TIMEOUT_MS, ...init } = {}) {
   let res;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
@@ -66,11 +66,11 @@ async function request(env, path, init = {}) {
         Accept: "application/json",
         ...(init.body ? { "Content-Type": "application/json" } : {}),
       },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
     if (err?.name === "TimeoutError" || err?.name === "AbortError")
-      throw new LlmError(`Nvidia took longer than ${TIMEOUT_MS / 1000} seconds to answer. Try again.`, 504);
+      throw new LlmError(`Nvidia took longer than ${(timeoutMs) / 1000} seconds to answer. Try again.`, 504);
     throw new LlmError(`Couldn't reach Nvidia (${err?.message || "network error"}).`, 502);
   }
   if (!res.ok) {
@@ -86,12 +86,28 @@ async function request(env, path, init = {}) {
     e.detail = detail;
     throw e;
   }
-  return res.json();
+  try {
+    return await res.json();
+  } catch {
+    console.error(`Nvidia ${init.method || "GET"} ${path} -> ${res.status}: reply was not JSON`);
+    throw new LlmError("Nvidia sent back a reply that couldn't be read. Try again.", 502);
+  }
 }
 
 // Cache the chosen model for an hour per Worker instance.
 let modelCache = { model: null, at: 0 };
-const badModels = new Map(); // model -> reason it couldn't be used
+const badModels = new Map(); // model -> { reason, at }: skipped for BAD_MODEL_TTL_MS
+const BAD_MODEL_TTL_MS = 10 * 60_000;
+
+function isBad(model) {
+  const entry = badModels.get(model);
+  if (!entry) return false;
+  if (Date.now() - entry.at > BAD_MODEL_TTL_MS) {
+    badModels.delete(model);
+    return false;
+  }
+  return true;
+}
 
 export function resetModelCache() {
   modelCache = { model: null, at: 0 };
@@ -100,7 +116,7 @@ export function resetModelCache() {
 
 /** Models that were skipped on this Worker instance, and why. */
 export function skippedModels() {
-  return Object.fromEntries(badModels);
+  return Object.fromEntries([...badModels].map(([m, e]) => [m, e.reason]));
 }
 
 /** Ordered list of models to try: NVIDIA_MODEL, preferred list, then other general chat models. */
@@ -118,70 +134,90 @@ export function rankModels(env, availableIds) {
   return [...new Set([...wanted.filter((m) => available.has(m)), ...others])];
 }
 
-/** Pick the best model not yet known to fail. */
-export async function resolveModel(env) {
-  if (modelCache.model && Date.now() - modelCache.at < 3_600_000) return modelCache.model;
-
+/** Models to try, best first, skipping ones recently found unavailable. */
+async function candidateModels(env) {
   let ids = null;
   try {
-    const list = await request(env, "/models");
+    const list = await request(env, "/models", { timeoutMs: 15_000 });
     ids = (list.data || []).map((m) => m.id);
   } catch (err) {
     // A bad key should be reported as such; anything else, just try our own list.
     if (err.status === 401) throw err;
   }
-
-  const model = rankModels(env, ids).find((m) => !badModels.has(m));
-  if (!model) {
-    throw new LlmError(
-      `None of the AI models could be used with this Nvidia key.${describeSkipped()}`,
-      404,
-    );
-  }
-  modelCache = { model, at: Date.now() };
-  return model;
+  return rankModels(env, ids).filter((m) => !isBad(m));
 }
 
-function describeSkipped() {
-  const list = [...badModels].slice(0, 4).map(([m, why]) => `${m}: ${why}`);
+function describeSkipped(extra = []) {
+  const list = [...extra, ...[...badModels].map(([m, e]) => `${m}: ${e.reason}`)].slice(0, 4);
   return list.length ? ` Tried: ${list.join("; ")}.` : "";
 }
 
 /** Reasoning models may wrap their thinking in <think> tags; keep only the answer. */
 function stripThinking(text) {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^[\s\S]*<\/think>/i, "").trim();
 }
 
-/** Send a system + user message, return { text, model }. Throws LlmError. */
+async function callModel(env, model, system, user, maxTokens, temperature) {
+  const json = await request(env, "/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+  const text = stripThinking(json.choices?.[0]?.message?.content ?? "");
+  if (!text) throw new LlmError("Nvidia sent back an empty answer. Try again.", 502);
+  return text;
+}
+
+/**
+ * Send a system + user message, return { text, model }. Throws LlmError.
+ * Uses the last working model; if a model is unavailable to this key (404),
+ * it is skipped for 10 minutes and the next one is tried. A 403 is only
+ * skipped for this request, since it may mean the whole account is blocked.
+ */
 export async function chat(env, system, user, { maxTokens = 1500, temperature = 0.2 } = {}) {
-  for (let attempt = 0; attempt < MAX_MODEL_TRIES; attempt++) {
-    const model = await resolveModel(env);
+  const cached = modelCache.model && Date.now() - modelCache.at < 3_600_000 ? modelCache.model : null;
+  const tried = new Set();
+  const refused = []; // "model: reason" for this request
+  let last403 = null;
+  let candidates = cached ? [cached] : await candidateModels(env);
+
+  while (tried.size < MAX_MODEL_TRIES) {
+    const model = candidates.find((m) => !tried.has(m) && !isBad(m));
+    if (!model) {
+      if (candidates.length === 1 && cached) {
+        candidates = await candidateModels(env); // cached model failed: load the full list once
+        if (candidates.some((m) => !tried.has(m) && !isBad(m))) continue;
+      }
+      break;
+    }
+    tried.add(model);
     try {
-      const json = await request(env, "/chat/completions", {
-        method: "POST",
-        body: JSON.stringify({
-          model,
-          temperature,
-          max_tokens: maxTokens,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-        }),
-      });
-      const text = stripThinking(json.choices?.[0]?.message?.content ?? "");
-      if (!text) throw new LlmError("Nvidia sent back an empty answer. Try again.", 502);
+      const text = await callModel(env, model, system, user, maxTokens, temperature);
+      modelCache = { model, at: Date.now() };
       return { text, model };
     } catch (err) {
-      // Model missing or not allowed for this key: skip it and try the next one.
-      const modelProblem =
-        err.status === 404 || err.status === 403 || (err.status === 400 && /model|function/i.test(err.message));
-      if (!modelProblem) throw err;
-      badModels.set(model, `${err.status}${err.detail ? ` ${err.detail.slice(0, 80)}` : ""}`);
-      modelCache = { model: null, at: 0 };
+      const reason = `${err.status}${err.detail ? ` ${err.detail.slice(0, 80)}` : ""}`;
+      if (err.status === 404 || (err.status === 400 && /model|function/i.test(err.detail || ""))) {
+        badModels.set(model, { reason, at: Date.now() });
+      } else if (err.status === 403) {
+        last403 = err;
+        refused.push(`${model}: ${reason}`);
+      } else {
+        throw err; // 401, 429, 5xx, timeout, network: not the model's fault
+      }
+      if (model === modelCache.model) modelCache = { model: null, at: 0 };
     }
   }
-  throw new LlmError(`None of the AI models could be used with this Nvidia key.${describeSkipped()}`, 404);
+  // Every model refused with 403: likely account-wide (permission or credits).
+  if (last403 && refused.length === tried.size) throw last403;
+  throw new LlmError(`None of the AI models could be used with this Nvidia key.${describeSkipped(refused)}`, 404);
 }
 
 // ---------- Step 5: driver messages ----------
@@ -222,6 +258,6 @@ export async function driverMessage(route, date, env) {
     return { text, source: "nvidia" };
   } catch (err) {
     console.error("LLM message failed, using plain text:", err.message);
-    return { text: fallback, source: "plain", note: err.message };
+    return { text: fallback, source: "plain", note: `AI unavailable: ${err.message}` };
   }
 }

@@ -196,7 +196,7 @@
     try {
       const m = await post("/api/driver-message", { date: current.date, driverId: card.dataset.driver, changes: applied });
       box.innerHTML = `<div class="row" style="margin:0;justify-content:space-between">
-          <span class="meta">${m.source === "nvidia" ? "Written by AI · check before sending" : "Plain version" + (m.note ? " · AI unavailable: " + esc(m.note) : "")}</span>
+          <span class="meta">${m.source === "nvidia" ? "Written by AI · check before sending" : "Plain version" + (m.note ? " · " + esc(m.note) : "")}</span>
           <button class="copyBtn">Copy</button></div><pre>${esc(m.text)}</pre>`;
     } catch (err) {
       box.innerHTML = `<span class="status err">${esc(err.message)}</span>`;

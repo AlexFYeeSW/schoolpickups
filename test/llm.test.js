@@ -157,10 +157,44 @@ test("models refused for this account (403/404) are skipped until one works", as
   const { model, text } = await chat(env, "s", "u");
   assert.equal(model, "openai/gpt-oss-20b");
   assert.equal(text, '{"answer": 5}');
-  assert.deepEqual(Object.keys(skippedModels()), ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b"]);
+  // 404 is remembered (model not on this account); 403 is only skipped for this request.
+  assert.deepEqual(Object.keys(skippedModels()), ["meta/llama-3.3-70b-instruct"]);
 });
 
 test("when every model is refused, the error lists what was tried", async () => {
   fakeNvidia({ models: ["meta/llama-3.3-70b-instruct"], reply: () => json({ detail: "Function not found for account" }, 404) });
   await assert.rejects(chat(env, "s", "u"), /None of the AI models.*llama-3\.3-70b-instruct: 404 Function not found/);
+});
+
+test("an account-wide 403 shows Nvidia's reason and doesn't stick", async () => {
+  let blocked = true;
+  fakeNvidia({
+    models: ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-20b"],
+    reply: () => blocked ? json({ detail: "Authorization failed" }, 403) : json({ choices: [{ message: { content: "OK" } }] }),
+  });
+  await assert.rejects(chat(env, "s", "u"), /refused this request \(403\).*Authorization failed/);
+  blocked = false; // e.g. credits topped up
+  const { text } = await chat(env, "s", "u");
+  assert.equal(text, "OK");
+});
+
+test("a non-JSON reply gives a readable error", async () => {
+  fakeNvidia({ reply: () => new Response("<html><body>Bad gateway</body></html>", { status: 200 }) });
+  await assert.rejects(chat(env, "s", "u"), /couldn't be read/);
+});
+
+test("the last working model is reused, and replaced if it disappears", async () => {
+  let gone = false;
+  const calls = fakeNvidia({
+    models: ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-20b"],
+    reply: (model) => gone && model === "meta/llama-3.3-70b-instruct"
+      ? json({ detail: "Function not found for account" }, 404)
+      : json({ choices: [{ message: { content: "OK" } }] }),
+  });
+  assert.equal((await chat(env, "s", "u")).model, "meta/llama-3.3-70b-instruct");
+  const before = calls.filter((c) => c.url.endsWith("/models")).length;
+  assert.equal((await chat(env, "s", "u")).model, "meta/llama-3.3-70b-instruct");
+  assert.equal(calls.filter((c) => c.url.endsWith("/models")).length, before, "no extra /models call when cached");
+  gone = true;
+  assert.equal((await chat(env, "s", "u")).model, "openai/gpt-oss-20b");
 });
