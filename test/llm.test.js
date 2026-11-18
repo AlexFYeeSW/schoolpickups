@@ -2,21 +2,32 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import * as sample from "../src/sample-data.js";
 import { validateChanges, extractJson, parseChanges } from "../src/changes.js";
-import { driverMessage } from "../src/llm.js";
+import { driverMessage, chat, cleanKey, resetModelCache } from "../src/llm.js";
 import { buildDailySchedule } from "../src/scheduler.js";
 
-const env = { NVIDIA_API_KEY: "test-key", NVIDIA_MODEL: "test-model" };
+const env = { NVIDIA_API_KEY: "test-key", NVIDIA_MODEL: "meta/llama-3.3-70b-instruct" };
 const realFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = realFetch; });
+afterEach(() => { globalThis.fetch = realFetch; resetModelCache(); });
 
-function fakeReply(content, status = 200) {
+const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
+
+/**
+ * Fake Nvidia API. `models` = ids returned by GET /models; `reply` = chat text
+ * (or a function (model) => Response for custom behaviour).
+ */
+function fakeNvidia({ models = ["meta/llama-3.3-70b-instruct"], reply = "OK", modelsStatus = 200 } = {}) {
   const calls = [];
-  globalThis.fetch = async (url, init) => {
-    calls.push({ url, body: JSON.parse(init.body), auth: init.headers.Authorization });
-    return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status });
+  globalThis.fetch = async (url, init = {}) => {
+    const call = { url, auth: init.headers?.Authorization, body: init.body ? JSON.parse(init.body) : null };
+    calls.push(call);
+    if (url.endsWith("/models")) return json({ data: models.map((id) => ({ id })) }, modelsStatus);
+    if (typeof reply === "function") return reply(call.body.model);
+    return json({ choices: [{ message: { content: reply } }] });
   };
   return calls;
 }
+const fakeReply = (content, status = 200) =>
+  fakeNvidia({ reply: () => (status === 200 ? json({ choices: [{ message: { content } }] }) : json({ detail: "boom" }, status)) });
 
 test("validateChanges keeps good changes and rejects bad ones", () => {
   const { valid, rejected } = validateChanges(sample, [
@@ -48,10 +59,11 @@ test("parseChanges sends the roster and returns checked changes", async () => {
     unclear: ["Two students are named Max"],
   }));
   const r = await parseChanges("Leo absent Thursday", sample, "2026-11-18", env);
-  assert.equal(calls[0].auth, "Bearer test-key");
-  assert.equal(calls[0].body.model, "test-model");
-  assert.match(calls[0].body.messages[0].content, /Today is wed 2026-11-18/);
-  assert.match(calls[0].body.messages[0].content, /s10 \| Leo/);
+  const chatCall = calls.find((c) => c.body);
+  assert.equal(chatCall.auth, "Bearer test-key");
+  assert.equal(chatCall.body.model, "meta/llama-3.3-70b-instruct");
+  assert.match(chatCall.body.messages[0].content, /Today is wed 2026-11-18/);
+  assert.match(chatCall.body.messages[0].content, /s10 \| Leo/);
   assert.equal(r.changes.length, 1);
   assert.equal(r.rejected.length, 1);
   assert.deepEqual(r.unclear, ["Two students are named Max"]);
@@ -84,4 +96,39 @@ test("driverMessage uses AI text only if nothing went missing", async () => {
   assert.equal((await driverMessage(route, "2026-11-16", env)).source, "plain");
 
   assert.equal((await driverMessage(route, "2026-11-16", {})).source, "plain");
+});
+
+test("cleanKey fixes copy-paste mistakes", () => {
+  assert.equal(cleanKey('  "nvapi-abc"\n'), "nvapi-abc");
+  assert.equal(cleanKey("Bearer nvapi-abc"), "nvapi-abc");
+  assert.equal(cleanKey(undefined), "");
+});
+
+test("picks a model Nvidia actually offers", async () => {
+  const calls = fakeNvidia({ models: ["some/embedding-model", "meta/llama-3.1-8b-instruct"] });
+  const { model } = await chat(env, "s", "u");
+  assert.equal(model, "meta/llama-3.1-8b-instruct");
+  assert.equal(calls.find((c) => c.body).body.model, "meta/llama-3.1-8b-instruct");
+});
+
+test("if a model is not found, tries the next one", async () => {
+  fakeNvidia({
+    modelsStatus: 500, // model list unavailable: fall back to trying names directly
+    reply: (model) => model === "meta/llama-3.3-70b-instruct"
+      ? json({ detail: "Function not found for account" }, 404)
+      : json({ choices: [{ message: { content: "OK" } }] }),
+  });
+  const { model, text } = await chat(env, "s", "u");
+  assert.equal(text, "OK");
+  assert.notEqual(model, "meta/llama-3.3-70b-instruct");
+});
+
+test("a rejected key gives a clear message", async () => {
+  fakeNvidia({ modelsStatus: 401, reply: () => json({ detail: "Authentication failed" }, 401) });
+  await assert.rejects(chat(env, "s", "u"), /rejected the API key \(401\)/);
+});
+
+test("network failure gives a clear message", async () => {
+  globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+  await assert.rejects(chat(env, "s", "u"), /Couldn't reach Nvidia/);
 });

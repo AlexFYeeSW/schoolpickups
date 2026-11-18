@@ -37,7 +37,7 @@
     .warn { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-top: 16px; }
     .warn ul { margin: 4px 0 0; padding-left: 20px; }
     .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 20px; }
-    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .row { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
     .status { color: var(--muted); font-size: 14px; }
     .status.err { color: var(--warn); }
     .list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
@@ -196,7 +196,7 @@
     try {
       const m = await post("/api/driver-message", { date: current.date, driverId: card.dataset.driver, changes: applied });
       box.innerHTML = `<div class="row" style="margin:0;justify-content:space-between">
-          <span class="meta">${m.source === "nvidia" ? "Written by AI · check before sending" : "Plain version"}</span>
+          <span class="meta">${m.source === "nvidia" ? "Written by AI · check before sending" : "Plain version" + (m.note ? " · AI unavailable: " + esc(m.note) : "")}</span>
           <button class="copyBtn">Copy</button></div><pre>${esc(m.text)}</pre>`;
     } catch (err) {
       box.innerHTML = `<span class="status err">${esc(err.message)}</span>`;

@@ -1,6 +1,6 @@
 import * as sample from "./sample-data.js";
 import { buildDailySchedule } from "./scheduler.js";
-import { driverMessage, llmEnabled } from "./llm.js";
+import { driverMessage, llmEnabled, chat, LlmError } from "./llm.js";
 import { parseChanges, validateChanges, MAX_TEXT_LENGTH } from "./changes.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -65,7 +65,7 @@ export default {
     const path = url.pathname;
 
     if (path === "/api/health") {
-      return json({ ok: true, llm: llmEnabled(env), model: env.NVIDIA_MODEL });
+      return json({ ok: true, llm: llmEnabled(env) });
     }
 
     // GET ?date=… for the plain schedule; POST {date, changes} to include today's changes.
@@ -105,7 +105,21 @@ export default {
         return json(await parseChanges(text, await loadData(env), today, env));
       } catch (err) {
         console.error("Parse failed:", err.message);
-        return json({ error: "The AI service didn't respond. Try again, or enter the change by hand." }, 502);
+        const msg = err instanceof LlmError ? err.message : "Something went wrong reading the message.";
+        return json({ error: msg }, 502);
+      }
+    }
+
+    // GET → one tiny test call to Nvidia; shows whether the key and model work.
+    if (path === "/api/ai-check") {
+      if (!llmEnabled(env)) return json({ ok: false, error: "NVIDIA_API_KEY secret is not set on this Worker." });
+      if (!(await allowLlmCall(request, env))) return json({ ok: false, error: "Too many requests. Wait a minute." }, 429);
+      const started = Date.now();
+      try {
+        const { text, model } = await chat(env, "Reply with the single word OK.", "Test", { maxTokens: 5, temperature: 0 });
+        return json({ ok: true, model, reply: text, ms: Date.now() - started });
+      } catch (err) {
+        return json({ ok: false, error: err.message, status: err.status ?? null, ms: Date.now() - started });
       }
     }
 
