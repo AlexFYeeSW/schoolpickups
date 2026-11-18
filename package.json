@@ -1,0 +1,15 @@
+{
+  "name": "schoolpickups",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily student pickup schedules for an afterschool program, on Cloudflare Workers.",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.2"
+  }
+}

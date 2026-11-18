@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "schoolpickups",
+  "main": "src/index.js",
+  "compatibility_date": "2025-10-01",
+
+  // The web pages in /public are served directly; /api/* goes to the Worker code.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Cloudflare cron runs on UTC. 12:00 PM in Los Angeles is 19:00 UTC in summer
+  // (PDT) and 20:00 UTC in winter (PST), so both fire Mon-Fri and the Worker
+  // only acts on the one that is actually 12 PM local time.
+  "triggers": {
+    "crons": ["0 19,20 * * 1-5"]
+  },
+
+  "vars": {
+    "TIMEZONE": "America/Los_Angeles",
+    "SEND_HOUR": "12",
+    "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct"
+  },
+
+  "observability": { "enabled": true }
+
+  // Secrets (set later with `npx wrangler secret put NAME`, never in this file):
+  //   NVIDIA_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
+}

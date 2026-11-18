@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pickup Schedule</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6676;
+      --line: #e3e6eb; --accent: #2457c5; --warn-bg: #fff4e0; --warn: #8a5300;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151b; --card: #1b2029; --text: #e7eaf0; --muted: #9aa3b2;
+        --line: #2c3340; --accent: #7aa2ff; --warn-bg: #3a2a10; --warn: #f3c37a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
+    h1 { margin: 0; font-size: 22px; }
+    .sub { color: var(--muted); margin: 4px 0 0; }
+    label { color: var(--muted); font-size: 13px; display: grid; gap: 4px; }
+    input { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+      background: var(--card); color: var(--text); }
+    .warn { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-top: 16px; }
+    .warn ul { margin: 4px 0 0; padding-left: 20px; }
+    .grid { display: grid; gap: 16px; margin-top: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .card h2 { margin: 0; font-size: 17px; }
+    .meta { color: var(--muted); font-size: 13px; }
+    ol { list-style: none; margin: 12px 0 0; padding: 0; }
+    li.stop { border-top: 1px solid var(--line); padding: 10px 0; }
+    .time { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+    .kids { color: var(--muted); font-size: 14px; margin-top: 2px; }
+    .empty { color: var(--muted); margin-top: 24px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Pickup Schedule</h1>
+      <p class="sub" id="summary">Loading…</p>
+    </div>
+    <label>Date <input type="date" id="date"></label>
+  </header>
+  <div id="warnings"></div>
+  <div class="grid" id="routes"></div>
+</main>
+<script>
+  const dateInput = document.getElementById("date");
+  const params = new URLSearchParams(location.search);
+  const onlyDriver = params.get("driver");
+  if (params.get("date")) dateInput.value = params.get("date");
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  async function load() {
+    const q = dateInput.value ? `?date=${dateInput.value}` : "";
+    const res = await fetch(`/api/schedule${q}`);
+    const data = await res.json();
+    if (!res.ok) { document.getElementById("summary").textContent = data.error || "Error"; return; }
+    if (!dateInput.value) dateInput.value = data.date;
+
+    const c = data.counts;
+    document.getElementById("summary").textContent =
+      `${data.weekday.toUpperCase()} ${data.date} · ${c.students} students · ${c.schools} schools · ${c.drivers} drivers`;
+
+    const warns = [...data.warnings, ...data.unassigned.map((s) => `Not assigned: ${s.name} (${s.school})`)];
+    document.getElementById("warnings").innerHTML = warns.length
+      ? `<div class="warn"><strong>Needs attention</strong><ul>${warns.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : "";
+
+    const routes = data.routes.filter((r) => !onlyDriver || r.driverId === onlyDriver);
+    document.getElementById("routes").innerHTML = routes.length ? routes.map((r) => `
+      <section class="card">
+        <h2>${esc(r.driverName)}</h2>
+        <div class="meta">${r.seats} seats · ${r.stops.filter((s) => s.type === "pickup").length} pickups</div>
+        <ol>${r.stops.map((s) => `
+          <li class="stop">
+            <span class="time">${esc(s.time)}</span>
+            ${s.type === "pickup" ? "Pick up" : "Drop off"} · ${esc(s.place)}
+            ${s.dismissal ? `<span class="tag">dismissal ${esc(s.dismissal)}</span>` : ""}
+            <div class="kids">${s.type === "pickup"
+              ? s.students.map((k) => esc(k.name) + (k.notes ? ` <em>(${esc(k.notes)})</em>` : "")).join(", ")
+              : `${s.students.length} students`}</div>
+          </li>`).join("")}
+        </ol>
+      </section>`).join("") : `<p class="empty">No pickups for this day.</p>`;
+  }
+
+  dateInput.addEventListener("change", load);
+  load();
+</script>
+</body>
+</html>
