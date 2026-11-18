@@ -2,7 +2,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import * as sample from "../src/sample-data.js";
 import { validateChanges, extractJson, parseChanges } from "../src/changes.js";
-import { driverMessage, chat, cleanKey, resetModelCache } from "../src/llm.js";
+import { driverMessage, chat, cleanKey, resetModelCache, rankModels, skippedModels } from "../src/llm.js";
 import { buildDailySchedule } from "../src/scheduler.js";
 
 const env = { NVIDIA_API_KEY: "test-key", NVIDIA_MODEL: "meta/llama-3.3-70b-instruct" };
@@ -131,4 +131,36 @@ test("a rejected key gives a clear message", async () => {
 test("network failure gives a clear message", async () => {
   globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
   await assert.rejects(chat(env, "s", "u"), /Couldn't reach Nvidia/);
+});
+
+test("never picks translation, speech or embedding models", () => {
+  const ids = [
+    "nvidia/riva-translate-4b-instruct-v2",
+    "nvidia/nv-embedqa-e5-v5",
+    "nvidia/llama-3.1-nemoguard-8b-content-safety",
+    "qwen/qwen2.5-coder-32b-instruct",
+    "openai/gpt-oss-20b",
+    "mistralai/mistral-small-24b-instruct",
+  ];
+  const ranked = rankModels({}, ids);
+  assert.deepEqual(ranked, ["openai/gpt-oss-20b", "mistralai/mistral-small-24b-instruct"]);
+});
+
+test("models refused for this account (403/404) are skipped until one works", async () => {
+  fakeNvidia({
+    models: ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "nvidia/riva-translate-4b-instruct-v2"],
+    reply: (model) =>
+      model === "meta/llama-3.3-70b-instruct" ? json({ detail: "Function not found for account" }, 404)
+      : model === "openai/gpt-oss-120b" ? json({ detail: "Authorization failed" }, 403)
+      : json({ choices: [{ message: { content: '<think>adding</think>{"answer": 5}' } }] }),
+  });
+  const { model, text } = await chat(env, "s", "u");
+  assert.equal(model, "openai/gpt-oss-20b");
+  assert.equal(text, '{"answer": 5}');
+  assert.deepEqual(Object.keys(skippedModels()), ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b"]);
+});
+
+test("when every model is refused, the error lists what was tried", async () => {
+  fakeNvidia({ models: ["meta/llama-3.3-70b-instruct"], reply: () => json({ detail: "Function not found for account" }, 404) });
+  await assert.rejects(chat(env, "s", "u"), /None of the AI models.*llama-3\.3-70b-instruct: 404 Function not found/);
 });

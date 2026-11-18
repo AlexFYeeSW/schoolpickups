@@ -18,6 +18,9 @@
     "crons": ["0 19,20 * * 1-5"]
   },
 
+  // Keep variables added in the dashboard when deploying (secrets are always kept).
+  "keep_vars": true,
+
   "vars": {
     "TIMEZONE": "America/Los_Angeles",
     "SEND_HOUR": "12",

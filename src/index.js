@@ -1,6 +1,6 @@
 import * as sample from "./sample-data.js";
 import { buildDailySchedule } from "./scheduler.js";
-import { driverMessage, llmEnabled, chat, LlmError } from "./llm.js";
+import { driverMessage, llmEnabled, chat, LlmError, skippedModels } from "./llm.js";
 import { parseChanges, validateChanges, MAX_TEXT_LENGTH } from "./changes.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -105,8 +105,11 @@ export default {
         return json(await parseChanges(text, await loadData(env), today, env));
       } catch (err) {
         console.error("Parse failed:", err.message);
-        const msg = err instanceof LlmError ? err.message : "Something went wrong reading the message.";
-        return json({ error: msg }, 502);
+        if (err instanceof LlmError) {
+          const status = err.status === 429 || err.status === 504 ? err.status : 502;
+          return json({ error: err.message, nvidiaStatus: err.status ?? null }, status);
+        }
+        return json({ error: "Something went wrong reading the message." }, 500);
       }
     }
 
@@ -116,10 +119,16 @@ export default {
       if (!(await allowLlmCall(request, env))) return json({ ok: false, error: "Too many requests. Wait a minute." }, 429);
       const started = Date.now();
       try {
-        const { text, model } = await chat(env, "Reply with the single word OK.", "Test", { maxTokens: 5, temperature: 0 });
-        return json({ ok: true, model, reply: text, ms: Date.now() - started });
+        const { text, model } = await chat(
+          env,
+          'You are a test. Answer with a JSON object only: {"answer": <number>}',
+          "What is 2 + 3?",
+          { maxTokens: 400, temperature: 0 },
+        );
+        const followsInstructions = /"answer"\s*:\s*5\b/.test(text);
+        return json({ ok: true, model, followsInstructions, reply: text.slice(0, 200), ms: Date.now() - started, skipped: skippedModels() });
       } catch (err) {
-        return json({ ok: false, error: err.message, status: err.status ?? null, ms: Date.now() - started });
+        return json({ ok: false, error: err.message, status: err.status ?? null, ms: Date.now() - started, skipped: skippedModels() });
       }
     }
 
