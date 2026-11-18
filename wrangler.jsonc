@@ -24,6 +24,11 @@
     "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct"
   },
 
+  // At most 10 AI requests per minute per visitor (protects the Nvidia bill).
+  "ratelimits": [
+    { "name": "LLM_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }
+  ],
+
   "observability": { "enabled": true }
 
   // Secrets (set later with `npx wrangler secret put NAME`, never in this file):

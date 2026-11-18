@@ -1,10 +1,20 @@
 import * as sample from "./sample-data.js";
 import { buildDailySchedule } from "./scheduler.js";
-import { driverMessage } from "./llm.js";
+import { driverMessage, llmEnabled } from "./llm.js";
+import { parseChanges, validateChanges, MAX_TEXT_LENGTH } from "./changes.js";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Until Supabase is connected, data comes from sample-data.js.
 async function loadData(_env) {
   return sample;
+}
+
+/** Master data plus the day's changes sent from the page (checked first). */
+async function dataWithChanges(env, changes) {
+  const data = await loadData(env);
+  const { valid } = validateChanges(data, changes);
+  return { ...data, exceptions: [...data.exceptions, ...valid] };
 }
 
 /** Today's date (YYYY-MM-DD) and hour in the business's time zone. */
@@ -31,32 +41,93 @@ function json(body, status = 200) {
   });
 }
 
+async function readBody(request) {
+  try {
+    const text = await request.text();
+    if (text.length > 50_000) return null;
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/** Limit AI calls per visitor so the public site can't run up the Nvidia bill. */
+async function allowLlmCall(request, env) {
+  if (!env.LLM_LIMITER) return true;
+  const key = request.headers.get("CF-Connecting-IP") || "unknown";
+  const { success } = await env.LLM_LIMITER.limit({ key });
+  return success;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const path = url.pathname;
 
-    if (url.pathname === "/api/health") {
-      return json({ ok: true });
+    if (path === "/api/health") {
+      return json({ ok: true, llm: llmEnabled(env), model: env.NVIDIA_MODEL });
     }
 
-    if (url.pathname === "/api/schedule") {
-      const date = url.searchParams.get("date") || localNow(env.TIMEZONE).date;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ error: "date must be YYYY-MM-DD" }, 400);
-      const schedule = buildDailySchedule(await loadData(env), date);
+    // GET ?date=… for the plain schedule; POST {date, changes} to include today's changes.
+    if (path === "/api/schedule") {
+      let date = url.searchParams.get("date");
+      let changes = [];
+      if (request.method === "POST") {
+        const body = await readBody(request);
+        if (!body) return json({ error: "Invalid JSON body" }, 400);
+        date = body.date;
+        changes = body.changes ?? [];
+      }
+      date ||= localNow(env.TIMEZONE).date;
+      if (!DATE_RE.test(date)) return json({ error: "date must be YYYY-MM-DD" }, 400);
+      const schedule = buildDailySchedule(await dataWithChanges(env, changes), date);
 
       if (url.searchParams.get("format") === "text") {
-        const messages = await Promise.all(schedule.routes.map((r) => driverMessage(r, date, env)));
-        return new Response(messages.join("\n\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+        const msgs = await Promise.all(schedule.routes.map((r) => driverMessage(r, date, env)));
+        return new Response(msgs.map((m) => m.text).join("\n\n"), {
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
       }
       return json(schedule);
     }
 
-    if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
+    // POST {text} → AI reads a message and proposes changes for staff to confirm.
+    if (path === "/api/changes/parse" && request.method === "POST") {
+      if (!llmEnabled(env)) return json({ error: "The Nvidia API key isn't set up yet." }, 503);
+      const body = await readBody(request);
+      const text = typeof body?.text === "string" ? body.text.trim() : "";
+      if (!text) return json({ error: "Type or paste a message first." }, 400);
+      if (text.length > MAX_TEXT_LENGTH) return json({ error: `Keep messages under ${MAX_TEXT_LENGTH} characters.` }, 400);
+      if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
+
+      try {
+        const today = DATE_RE.test(body.today ?? "") ? body.today : localNow(env.TIMEZONE).date;
+        return json(await parseChanges(text, await loadData(env), today, env));
+      } catch (err) {
+        console.error("Parse failed:", err.message);
+        return json({ error: "The AI service didn't respond. Try again, or enter the change by hand." }, 502);
+      }
+    }
+
+    // POST {date, driverId, changes} → friendly text message for one driver.
+    if (path === "/api/driver-message" && request.method === "POST") {
+      const body = await readBody(request);
+      if (!body || !DATE_RE.test(body.date ?? "")) return json({ error: "date must be YYYY-MM-DD" }, 400);
+      const schedule = buildDailySchedule(await dataWithChanges(env, body.changes ?? []), body.date);
+      const route = schedule.routes.find((r) => r.driverId === body.driverId);
+      if (!route) return json({ error: "That driver has no route on this day." }, 404);
+      if (llmEnabled(env) && !(await allowLlmCall(request, env))) {
+        return json({ error: "Too many requests. Wait a minute and try again." }, 429);
+      }
+      return json(await driverMessage(route, body.date, env));
+    }
+
+    if (path.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);
   },
 
   // Step 6–7: runs from the cron trigger in wrangler.jsonc.
-  async scheduled(controller, env, ctx) {
+  async scheduled(controller, env) {
     const { date, hour } = localNow(env.TIMEZONE, new Date(controller.scheduledTime));
     // Two UTC crons cover daylight saving; only the one at 12 PM local time acts.
     if (hour !== Number(env.SEND_HOUR)) {
@@ -67,10 +138,10 @@ export default {
     const schedule = buildDailySchedule(await loadData(env), date);
     for (const w of schedule.warnings) console.warn("Schedule warning:", w);
 
-    // TODO: save the schedule to Supabase and send each message by SMS/email.
+    // TODO: save the schedule to Supabase once it's connected.
     for (const route of schedule.routes) {
-      const message = await driverMessage(route, date, env);
-      console.log(`Would send to ${route.driverName}:\n${message}`);
+      const { text } = await driverMessage(route, date, env);
+      console.log(`Schedule ready for ${route.driverName}:\n${text}`);
     }
   },
 };

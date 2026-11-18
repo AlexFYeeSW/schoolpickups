@@ -20,6 +20,22 @@ All drivers start and end at the center. The LLM only rewrites the text; it
 never decides assignments, and its output is discarded if a student name goes
 missing.
 
+## AI features (Nvidia)
+
+Needs the `NVIDIA_API_KEY` secret on the Worker (Settings → Variables and Secrets,
+type **Secret**). Check it's picked up at `/api/health` (`"llm": true`).
+
+- **Daily changes:** staff paste a message ("Leo absent Thursday, Driver B off
+  today"). The AI proposes changes; each is checked against the real student,
+  driver and school lists, and nothing is applied until staff confirm.
+- **Text message:** each driver card can produce a friendly message to copy and
+  send. If the AI drops any name or time, the plain version is used instead.
+- AI requests are limited to 10 per minute per visitor (`LLM_LIMITER`).
+- Until Supabase is connected, applied changes are saved in the staff member's
+  browser only; driver links don't see them yet.
+- Student names are sent to Nvidia to read messages. Review this before using
+  real student data.
+
 ## Links
 
 - Everyone's routes: `https://<your-worker>.workers.dev/`
