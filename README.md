@@ -27,13 +27,12 @@ missing.
 - A specific day: add `&date=2026-11-16`
 - Raw data: `/api/schedule?date=2026-11-16` (add `&format=text` for driver messages)
 
-## Deploying from GitHub
+## Deploying
 
-1. In this repository on GitHub: **Settings → Secrets and variables → Actions → New repository secret**
-   - `CLOUDFLARE_API_TOKEN`: the token you created
-   - `CLOUDFLARE_ACCOUNT_ID`: from the Cloudflare dashboard (Workers & Pages overview)
-2. Merge into `main`, or run **Actions → Deploy to Cloudflare → Run workflow**.
-3. The site appears at `https://schoolpickups.<your-subdomain>.workers.dev`.
+Cloudflare Workers Builds is connected to this GitHub repository. Every push
+to `main` deploys automatically; other branches get a preview URL. Build
+command: none. Deploy command: `npx wrangler deploy`. GitHub Actions only runs
+the tests.
 
 ## Running locally
 
