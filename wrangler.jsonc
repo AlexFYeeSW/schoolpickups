@@ -24,7 +24,9 @@
   "vars": {
     "TIMEZONE": "America/Los_Angeles",
     "SEND_HOUR": "12",
-    "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct"
+    "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct",
+    // Not secret: the project's public address. The key is the SUPABASE_SECRET_KEY secret.
+    "SUPABASE_URL": "https://qdghsjanijuzneukvhwt.supabase.co"
   },
 
   // At most 30 AI requests per minute per visitor (protects the Nvidia bill).
@@ -35,5 +37,5 @@
   "observability": { "enabled": true }
 
   // Secrets (set in the Cloudflare dashboard as type Secret, never in this file):
-  //   NVIDIA_API_KEY, SUPABASE_URL, SUPABASE_SECRET_KEY
+  //   NVIDIA_API_KEY, SUPABASE_SECRET_KEY
 }
