@@ -1,7 +1,10 @@
 -- Supabase schema for the pickup app (not connected yet).
 -- Run in the Supabase SQL editor when you're ready to move off sample data.
+-- Safe to run more than once: existing tables are left as they are (no data is
+-- deleted). If a table already existed with different columns, it is NOT
+-- changed. Use the check query at the bottom of this file to compare.
 
-create table schools (
+create table if not exists schools (
   id          text primary key,
   name        text not null,
   address     text,
@@ -10,7 +13,7 @@ create table schools (
   dismissal_thu time, dismissal_fri time
 );
 
-create table drivers (
+create table if not exists drivers (
   id      text primary key,
   name    text not null,
   phone   text,
@@ -19,7 +22,7 @@ create table drivers (
   days    text[] not null default '{mon,tue,wed,thu,fri}'
 );
 
-create table students (
+create table if not exists students (
   id         text primary key,
   name       text not null,
   school_id  text not null references schools(id),
@@ -30,7 +33,7 @@ create table students (
 );
 
 -- Travel minutes between two places ('base' = the afterschool center).
-create table travel_times (
+create table if not exists travel_times (
   from_id  text not null,
   to_id    text not null,
   minutes  int  not null,
@@ -38,7 +41,7 @@ create table travel_times (
 );
 
 -- Daily changes (absences, driver off, early release, extra pickup).
-create table exceptions (
+create table if not exists exceptions (
   id          bigint generated always as identity primary key,
   date        date not null,
   type        text not null check (type in ('student_absent','driver_off','dismissal_change','extra_pickup')),
@@ -52,14 +55,14 @@ create table exceptions (
 );
 
 -- The locked schedule that was sent each day, plus delivery results.
-create table schedules (
+create table if not exists schedules (
   date        date primary key,
   data        jsonb not null,
   locked_at   timestamptz,
   created_at  timestamptz not null default now()
 );
 
-create table deliveries (
+create table if not exists deliveries (
   id          bigint generated always as identity primary key,
   date        date not null references schedules(date),
   driver_id   text not null references drivers(id),
@@ -78,3 +81,10 @@ alter table travel_times enable row level security;
 alter table exceptions   enable row level security;
 alter table schedules    enable row level security;
 alter table deliveries   enable row level security;
+
+-- Check what exists (run on its own):
+-- select table_name, column_name, data_type
+-- from information_schema.columns
+-- where table_schema = 'public'
+--   and table_name in ('schools','drivers','students','travel_times','exceptions','schedules','deliveries')
+-- order by table_name, ordinal_position;
