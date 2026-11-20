@@ -61,6 +61,19 @@ npm run dev        # http://localhost:8787
 Trigger the 12 PM job by hand: `curl "http://localhost:8787/__scheduled?cron=0+20+*+*+1-5"`.
 It only acts when it is actually 12 PM in `TIMEZONE`.
 
+## When a driver can't work
+
+On their link (`/?driver=<id>`), a driver clicks **I can't work this day**.
+The page shows the effect first (who takes their students, and whether
+everyone is still covered), then saves a `driver_off` change to Supabase on
+confirm. Everyone's schedule rebuilds with the remaining drivers, including
+second trips if cars are full; students who can't be covered are listed under
+"Needs attention". **I can work after all** undoes it. Requires the database.
+
+In Claude Code, the project skill `.claude/skills/driver-unavailable/` covers
+the same situation; preview from the command line with
+`node .claude/skills/driver-unavailable/scripts/reschedule.mjs --driver "Driver B" --date tomorrow`.
+
 ## Supabase (database)
 
 1. In the Supabase SQL Editor, run `supabase/schema.sql` (creates the tables),

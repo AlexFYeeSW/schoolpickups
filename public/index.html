@@ -95,6 +95,9 @@
 
   <div id="dataNote"></div>
   <div id="warnings"></div>
+  <section class="panel" id="driverPanel" hidden>
+    <div id="driverPanelBody"></div>
+  </section>
   <div class="grid" id="routes"></div>
 </main>
 <script>
@@ -160,6 +163,9 @@
     }
     $("dataNote").innerHTML = note ? `<div class="warn">${esc(note)}</div>` : "";
 
+    if (staffView && data.driversOff?.length) {
+      $("summary").textContent += ` · off: ${data.driversOff.map((d) => d.name).join(", ")}`;
+    }
     const warns = [...data.warnings, ...data.unassigned.map((s) => `Not assigned: ${s.name} (${s.school})`)];
     $("warnings").innerHTML = warns.length
       ? `<div class="warn"><strong>Needs attention</strong><ul>${warns.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : "";
@@ -185,9 +191,64 @@
           </li>`).join("")}
         </ol>
         <div class="msg" hidden></div>
-      </section>`).join("") : `<p class="empty">No pickups for this day.</p>`;
+      </section>`).join("") : `<p class="empty">${!staffView && data.driversOff?.some((d) => d.id === onlyDriver) ? "You have no pickups this day." : "No pickups for this day."}</p>`;
     renderApplied();
+    renderDriverPanel(data);
   }
+
+  // ---------- driver: "I can't work this day" ----------
+  function renderDriverPanel(data) {
+    if (staffView) return;
+    const panel = $("driverPanel"), body = $("driverPanelBody");
+    const isOff = data.driversOff?.some((d) => d.id === onlyDriver);
+    const hasRoute = data.routes.some((r) => r.driverId === onlyDriver);
+    const past = data.date < todayLocal();
+    panel.hidden = past || (!isOff && !hasRoute);
+    if (panel.hidden) return;
+    body.innerHTML = isOff
+      ? `<h2>You're marked as not working on <span style="white-space:nowrap">${esc(data.date)}</span></h2>
+         <p class="note">Your students have been given to the other drivers.</p>
+         <div class="row"><button id="availBtn">I can work after all</button><span class="status" id="driverStatus"></span></div>`
+      : `<h2>Can't drive on <span style="white-space:nowrap">${esc(data.date)}</span>?</h2>
+         <p class="note">Let the office know. Your students will be given to the other drivers.</p>
+         <div class="row"><button class="primary" id="offBtn">I can't work this day</button><span class="status" id="driverStatus"></span></div>
+         <div id="offPreview"></div>`;
+  }
+
+  $("driverPanel").addEventListener("click", async (e) => {
+    const date = current?.date;
+    const status = () => $("driverStatus");
+    const fail = (err) => { status().className = "status err"; status().textContent = err.message; };
+    if (e.target.id === "offBtn") {
+      e.target.disabled = true;
+      status().className = "status"; status().textContent = "Checking…";
+      try {
+        const r = await post("/api/driver-unavailable", { driverId: onlyDriver, date, preview: true });
+        status().textContent = "";
+        $("offPreview").innerHTML = `
+          <div class="${r.allCovered ? "note" : "warn"}" style="margin-top:10px">${esc(r.summary)}</div>
+          <div class="row"><button class="primary" id="offConfirm">Yes, I can't work on ${esc(date)}</button>
+          <button id="offCancel">Cancel</button></div>`;
+      } catch (err) { fail(err); }
+      e.target.disabled = false;
+    } else if (e.target.id === "offCancel") {
+      $("offPreview").innerHTML = "";
+    } else if (e.target.id === "offConfirm") {
+      e.target.disabled = true;
+      try {
+        const r = await post("/api/driver-unavailable", { driverId: onlyDriver, date });
+        await load();
+        $("driverStatus").className = "status";
+        $("driverStatus").textContent = r.saved ? "Saved. The office can see it." : r.summary;
+      } catch (err) { fail(err); e.target.disabled = false; }
+    } else if (e.target.id === "availBtn") {
+      e.target.disabled = true;
+      try {
+        await post("/api/driver-available", { driverId: onlyDriver, date });
+        await load();
+      } catch (err) { fail(err); e.target.disabled = false; }
+    }
+  });
 
   // ---------- driver message (AI) ----------
   $("routes").addEventListener("click", async (e) => {

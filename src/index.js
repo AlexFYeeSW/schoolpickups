@@ -1,5 +1,6 @@
 import { buildDailySchedule } from "./scheduler.js";
-import { loadData as loadFromDb, dbStatus, DbError } from "./db.js";
+import { loadData as loadFromDb, dbStatus, DbError, markDriverOff, clearDriverOff } from "./db.js";
+import { rescheduleWithoutDriver } from "./reschedule.js";
 import { driverMessage, llmEnabled, chat, LlmError, skippedModels } from "./llm.js";
 import { parseChanges, validateChanges, MAX_TEXT_LENGTH } from "./changes.js";
 
@@ -158,6 +159,45 @@ async function handle(request, env) {
   }
 
   // POST {date, driverId, changes} → friendly text message for one driver.
+  // POST {driverId, date, preview?} → a driver reports they can't work that day.
+  // The schedule is rebuilt with the remaining drivers. With preview: true,
+  // nothing is saved; the page uses this to show the effect before confirming.
+  if (path === "/api/driver-unavailable" && request.method === "POST") {
+    const body = await readBody(request);
+    const date = body?.date;
+    const driverId = typeof body?.driverId === "string" ? body.driverId : "";
+    if (!DATE_RE.test(date ?? "") || Number.isNaN(Date.parse(date))) return json({ error: "date must be YYYY-MM-DD" }, 400);
+    if (!driverId) return json({ error: "driverId is required" }, 400);
+    if (date < localNow(env.TIMEZONE).date) return json({ error: "That day has already passed." }, 400);
+    if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
+
+    const data = await loadData(env);
+    if (!data.drivers.some((d) => d.id === driverId)) return json({ error: "Unknown driver." }, 404);
+    const result = rescheduleWithoutDriver(data, driverId, date);
+    const { before, after, ...report } = result;
+
+    if (body.preview) return json({ ...report, saved: false });
+    if (!result.scheduledToWork) return json({ ...report, saved: false });
+    if (data.source !== "supabase") {
+      return json({ ...report, saved: false, error: "Can't save: the database isn't connected, so other people wouldn't see this. Tell the office directly." }, 503);
+    }
+    await markDriverOff(env, driverId, date, "Reported by the driver on the website");
+    console.log(`Driver unavailable: ${result.summary}`);
+    return json({ ...report, saved: true });
+  }
+
+  // POST {driverId, date} → undo: the driver can work after all.
+  if (path === "/api/driver-available" && request.method === "POST") {
+    const body = await readBody(request);
+    if (!DATE_RE.test(body?.date ?? "") || typeof body?.driverId !== "string") {
+      return json({ error: "driverId and date (YYYY-MM-DD) are required" }, 400);
+    }
+    if (dbStatus(env) !== "connected") return json({ error: "The database isn't connected." }, 503);
+    if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
+    const { removed } = await clearDriverOff(env, body.driverId, body.date);
+    return json({ ok: true, removed });
+  }
+
   if (path === "/api/driver-message" && request.method === "POST") {
     const body = await readBody(request);
     if (!body || !DATE_RE.test(body.date ?? "")) return json({ error: "date must be YYYY-MM-DD" }, 400);

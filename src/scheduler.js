@@ -35,8 +35,9 @@ export function buildRoster(data, dateStr) {
     (s) => (s.days.includes(day) || extra.has(s.id)) && !absent.has(s.id),
   );
   const drivers = data.drivers.filter((d) => d.days.includes(day) && !driversOff.has(d.id));
+  const off = data.drivers.filter((d) => d.days.includes(day) && driversOff.has(d.id));
 
-  return { date: dateStr, day, schools, students, drivers };
+  return { date: dateStr, day, schools, students, drivers, off };
 }
 
 /**
@@ -183,6 +184,7 @@ export function buildDailySchedule(data, dateStr) {
     weekday: roster.day,
     counts: { students: roster.students.length, drivers: roster.drivers.length, schools: new Set(roster.students.map((s) => s.schoolId)).size },
     warnings,
+    driversOff: roster.off.map((d) => ({ id: d.id, name: d.name })),
     unassigned: unassigned.map((s) => ({ id: s.id, name: s.name, school: placeName(s.schoolId) })),
     routes: routes.map((r) => ({
       ...r,

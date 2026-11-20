@@ -30,37 +30,69 @@ export function dbStatus(env) {
   return "connected";
 }
 
-async function select(env, table, query = "select=*") {
+/** Call Supabase's REST API for one table. */
+async function rest(env, table, { method = "GET", query = "", body, prefer } = {}) {
   const key = secretKey(env);
   const headers = { apikey: key, Accept: "application/json" };
   // Legacy keys are JWTs (eyJ…) and also go in Authorization; new sb_secret_ keys don't.
   if (key.startsWith("eyJ")) headers.Authorization = `Bearer ${key}`;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (prefer) headers.Prefer = prefer;
 
   let res;
   try {
-    res = await fetch(`${baseUrl(env)}/rest/v1/${table}?${query}`, {
+    res = await fetch(`${baseUrl(env)}/rest/v1/${table}${query ? `?${query}` : ""}`, {
+      method,
       headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
     throw new DbError(`Couldn't reach Supabase (${err?.message || "network error"}).`, 502);
   }
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    let detail = body;
+    const text = await res.text().catch(() => "");
+    let detail = text;
     try {
-      const j = JSON.parse(body);
-      detail = j.message || j.hint || j.error || body;
+      const j = JSON.parse(text);
+      detail = j.message || j.hint || j.error || text;
     } catch {}
     detail = String(detail).replace(/\s+/g, " ").slice(0, 160);
-    console.error(`Supabase ${table} -> ${res.status}: ${detail}`);
+    console.error(`Supabase ${method} ${table} -> ${res.status}: ${detail}`);
     if (res.status === 401 || res.status === 403)
       throw new DbError(`Supabase refused the key (${res.status}). Use the secret key (sb_secret_…) in SUPABASE_SECRET_KEY. Supabase said: "${detail}"`, res.status);
     if (res.status === 404 || /does not exist|schema cache/i.test(detail))
       throw new DbError(`The "${table}" table wasn't found. Run supabase/schema.sql in the Supabase SQL Editor. Supabase said: "${detail}"`, res.status);
-    throw new DbError(`Supabase error ${res.status} reading "${table}": "${detail}"`, res.status);
+    throw new DbError(`Supabase error ${res.status} on "${table}": "${detail}"`, res.status);
   }
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+const select = (env, table, query = "select=*") => rest(env, table, { query });
+
+/** Record that a driver won't work on a date (once; repeat calls do nothing). */
+export async function markDriverOff(env, driverId, date, note) {
+  const q = `driver_id=eq.${encodeURIComponent(driverId)}&date=eq.${date}&type=eq.driver_off`;
+  const existing = await rest(env, "exceptions", { query: `select=id&${q}` });
+  if (existing.length) {
+    // Make sure it counts even if it was entered unconfirmed earlier.
+    await rest(env, "exceptions", { method: "PATCH", query: q, body: { confirmed: true } });
+    return { created: false };
+  }
+  await rest(env, "exceptions", {
+    method: "POST",
+    body: { date, type: "driver_off", driver_id: driverId, confirmed: true, source_text: note },
+    prefer: "return=minimal",
+  });
+  return { created: true };
+}
+
+/** Undo: the driver can work on that date after all. */
+export async function clearDriverOff(env, driverId, date) {
+  const q = `driver_id=eq.${encodeURIComponent(driverId)}&date=eq.${date}&type=eq.driver_off`;
+  const removed = await rest(env, "exceptions", { method: "DELETE", query: q, prefer: "return=representation" });
+  return { removed: removed?.length ?? 0 };
 }
 
 /** "15:00:00" or "15:00" → 900 (minutes after midnight). */
