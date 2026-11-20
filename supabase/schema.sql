@@ -33,12 +33,16 @@ create table if not exists students (
 );
 
 -- Travel minutes between two places ('base' = the afterschool center).
+-- Filled by hand, or from Google Routes (with traffic) when GOOGLE_MAPS_API_KEY is set.
 create table if not exists travel_times (
   from_id  text not null,
   to_id    text not null,
   minutes  int  not null,
   primary key (from_id, to_id)
 );
+-- Added later; "if not exists" so running this file again upgrades older setups.
+alter table travel_times add column if not exists source     text not null default 'manual'; -- manual | google
+alter table travel_times add column if not exists updated_at timestamptz not null default now();
 
 -- Daily changes (absences, driver off, early release, extra pickup).
 create table if not exists exceptions (

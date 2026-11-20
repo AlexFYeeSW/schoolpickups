@@ -14,8 +14,10 @@
   // Cloudflare cron runs on UTC. 12:00 PM in Los Angeles is 19:00 UTC in summer
   // (PDT) and 20:00 UTC in winter (PST), so both fire Mon-Fri and the Worker
   // only acts on the one that is actually 12 PM local time.
+  // The Monday 10:00 UTC job (2-3 AM in Los Angeles) refreshes driving times
+  // from Google Routes; it must match WEEKLY_TRAVEL_CRON in src/index.js.
   "triggers": {
-    "crons": ["0 19,20 * * 1-5"]
+    "crons": ["0 19,20 * * 1-5", "0 10 * * 1"]
   },
 
   // Keep variables added in the dashboard when deploying (secrets are always kept).
@@ -24,6 +26,8 @@
   "vars": {
     "TIMEZONE": "America/Los_Angeles",
     "SEND_HOUR": "12",
+    // Driving times are looked up for traffic at this local time on a weekday.
+    "TRAFFIC_DEPARTURE": "15:00",
     "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct",
     // Not secret: the project's public address. The key is the SUPABASE_SECRET_KEY secret.
     "SUPABASE_URL": "https://qdghsjanijuzneukvhwt.supabase.co"
@@ -37,5 +41,6 @@
   "observability": { "enabled": true }
 
   // Secrets (set in the Cloudflare dashboard as type Secret, never in this file):
-  //   NVIDIA_API_KEY, SUPABASE_SECRET_KEY
+  //   NVIDIA_API_KEY, SUPABASE_SECRET_KEY, GOOGLE_MAPS_API_KEY
+  // Variable set in the dashboard: CENTER_ADDRESS (the center's street address).
 }

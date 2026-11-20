@@ -1,6 +1,10 @@
 import { buildDailySchedule } from "./scheduler.js";
 import { loadData as loadFromDb, dbStatus, DbError, markDriverOff, clearDriverOff } from "./db.js";
 import { rescheduleWithoutDriver } from "./reschedule.js";
+import { travelStatus, refreshTravelTimes, MapsError } from "./maps.js";
+
+// Cron expression for the weekly driving-time refresh (must match wrangler.jsonc).
+const WEEKLY_TRAVEL_CRON = "0 10 * * 1";
 import { driverMessage, llmEnabled, chat, LlmError, skippedModels } from "./llm.js";
 import { parseChanges, validateChanges, MAX_TEXT_LENGTH } from "./changes.js";
 
@@ -66,6 +70,7 @@ export default {
       return await handle(request, env);
     } catch (err) {
       if (err instanceof DbError) return json({ error: err.message, database: dbStatus(env) }, 503);
+      if (err instanceof MapsError) return json({ error: err.message }, err.status >= 400 && err.status < 600 ? err.status : 502);
       console.error("Unhandled error:", err?.stack || err);
       return json({ error: `Server error: ${err?.message || err}` }, 500);
     }
@@ -73,6 +78,15 @@ export default {
 
   // Step 6–7: runs from the cron trigger in wrangler.jsonc.
   async scheduled(controller, env) {
+    if (controller.cron === WEEKLY_TRAVEL_CRON) {
+      try {
+        const r = await refreshTravelTimes(env, { force: true });
+        console.log("Weekly driving-time refresh:", r.summary);
+      } catch (err) {
+        console.error("Weekly driving-time refresh failed:", err.message);
+      }
+      return;
+    }
     return runNoonJob(controller, env);
   },
 };
@@ -159,6 +173,17 @@ async function handle(request, env) {
   }
 
   // POST {date, driverId, changes} → friendly text message for one driver.
+  // GET → where driving times come from and whether they can be refreshed.
+  if (path === "/api/travel-times" && request.method === "GET") {
+    return json(await travelStatus(env));
+  }
+
+  // POST → look up driving times with traffic from Google (at most once a day).
+  if (path === "/api/travel-times/refresh" && request.method === "POST") {
+    if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
+    return json(await refreshTravelTimes(env));
+  }
+
   // POST {driverId, date, preview?} → a driver reports they can't work that day.
   // The schedule is rebuilt with the remaining drivers. With preview: true,
   // nothing is saved; the page uses this to show the effect before confirming.

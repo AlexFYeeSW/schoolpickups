@@ -95,6 +95,16 @@
 
   <div id="dataNote"></div>
   <div id="warnings"></div>
+  <section class="panel" id="travelPanel" hidden>
+    <h2>Driving times</h2>
+    <p class="note" id="travelInfo">Loading…</p>
+    <div class="row">
+      <button id="travelBtn" hidden>Refresh driving times</button>
+      <span class="status" id="travelStatus"></span>
+    </div>
+    <div id="travelWarn"></div>
+  </section>
+
   <section class="panel" id="driverPanel" hidden>
     <div id="driverPanelBody"></div>
   </section>
@@ -195,6 +205,58 @@
     renderApplied();
     renderDriverPanel(data);
   }
+
+  // ---------- driving times (Google Routes) ----------
+  async function loadTravel() {
+    if (!staffView) return;
+    let t;
+    try {
+      const res = await fetch("/api/travel-times");
+      t = await res.json();
+      if (!res.ok) throw new Error(t.error || `Error ${res.status}`);
+    } catch (e) {
+      $("travelPanel").hidden = false;
+      $("travelInfo").textContent = e.message;
+      return;
+    }
+    $("travelPanel").hidden = false;
+    if (t.database !== "connected") {
+      $("travelInfo").textContent = "Using the sample driving times (database not connected).";
+      return;
+    }
+    const when = t.lastUpdatedFromGoogle ? new Date(t.lastUpdatedFromGoogle).toLocaleString() : null;
+    $("travelInfo").textContent = when
+      ? `${t.fromGoogle} of ${t.pairs} driving times come from Google with weekday-afternoon traffic, last updated ${when}. They refresh automatically every Monday.`
+      : `${t.pairs} driving times, all entered by hand. Google traffic times aren't set up yet.`;
+    $("travelBtn").hidden = Boolean(t.setupProblem);
+    $("travelBtn").disabled = !t.canRefresh;
+    $("travelStatus").textContent = t.canRefresh ? "" : (t.reason || "");
+    const warn = [];
+    if (t.setupProblem) warn.push(t.setupProblem);
+    if (t.missingAddresses?.length) warn.push(`No address for: ${t.missingAddresses.join(", ")}. Add it in the Supabase schools table to use Google times for them.`);
+    $("travelWarn").innerHTML = warn.length ? `<div class="warn"><ul>${warn.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : "";
+  }
+
+  $("travelBtn").addEventListener("click", async () => {
+    $("travelBtn").disabled = true;
+    $("travelStatus").className = "status";
+    $("travelStatus").textContent = "Asking Google…";
+    try {
+      const r = await post("/api/travel-times/refresh", {});
+      $("travelStatus").textContent = r.summary;
+      if (r.problems?.length) {
+        $("travelWarn").innerHTML = `<div class="warn"><strong>Some routes failed</strong><ul>${r.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>`;
+      }
+      await load();
+      const msg = r.summary;
+      await loadTravel();
+      $("travelStatus").textContent = msg;
+    } catch (err) {
+      $("travelStatus").className = "status err";
+      $("travelStatus").textContent = err.message;
+      $("travelBtn").disabled = false;
+    }
+  });
 
   // ---------- driver: "I can't work this day" ----------
   function renderDriverPanel(data) {
@@ -351,6 +413,7 @@
     }
   }).catch(() => {});
   load();
+  loadTravel();
 </script>
 </body>
 </html>

@@ -93,10 +93,31 @@ Daily changes stored in the `exceptions` table (with `confirmed = true`) are
 applied for everyone, including driver links. Changes applied on the page are
 still saved in that browser only.
 
+## Driving times (Google Routes API, with traffic)
+
+The scheduler uses the `travel_times` table. With Google set up, the Worker
+asks the Routes API for driving times **at 3 PM on the next weekday** (traffic
+predictions) between the center and every school, in both directions, and
+saves them there. It runs every Monday at about 2–3 AM Los Angeles time, and
+staff can press **Refresh driving times** (at most once per 24 hours). Only
+addresses are sent to Google, never student information.
+
+Setup:
+1. In Google Cloud: create a project with billing, enable the **Routes API**,
+   and create an API key restricted to the Routes API.
+2. In Cloudflare (Worker → Settings → Variables and Secrets):
+   - `GOOGLE_MAPS_API_KEY` as a **Secret**
+   - `CENTER_ADDRESS` (the afterschool center's street address) as a Variable
+3. Run `supabase/schema.sql` again (adds two columns; safe to re-run).
+4. Put each school's street address in the Supabase `schools` table.
+5. Press **Refresh driving times** on the staff page.
+
+Change the traffic time with `TRAFFIC_DEPARTURE` in `wrangler.jsonc`.
+
 ## Secrets
 
 Set on the Worker (Cloudflare dashboard, type Secret, or `npx wrangler secret put NAME`):
-`NVIDIA_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`. Never commit them.
+`NVIDIA_API_KEY`, `SUPABASE_SECRET_KEY`, `GOOGLE_MAPS_API_KEY`. Never commit them.
 
 ## Before using real student data
 
