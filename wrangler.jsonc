@@ -34,6 +34,6 @@
 
   "observability": { "enabled": true }
 
-  // Secrets (set later with `npx wrangler secret put NAME`, never in this file):
-  //   NVIDIA_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
+  // Secrets (set in the Cloudflare dashboard as type Secret, never in this file):
+  //   NVIDIA_API_KEY, SUPABASE_URL, SUPABASE_SECRET_KEY
 }

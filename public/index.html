@@ -93,6 +93,7 @@
     </div>
   </section>
 
+  <div id="dataNote"></div>
   <div id="warnings"></div>
   <div class="grid" id="routes"></div>
 </main>
@@ -148,6 +149,16 @@
     const c = data.counts;
     $("summary").textContent =
       `${data.weekday.toUpperCase()} ${data.date} · ${c.students} students · ${c.schools} schools · ${c.drivers} drivers`;
+
+    let note = "";
+    if (data.dataSource === "sample") {
+      note = data.database === "needs-secret-key"
+        ? "Showing made-up sample data. Supabase has only the publishable key; add SUPABASE_SECRET_KEY in Cloudflare to use your database."
+        : "Showing made-up sample data. Supabase isn't connected.";
+    } else if (data.counts.students === 0 && data.routes.length === 0) {
+      note = "Connected to Supabase, but there are no students for this day. Run supabase/seed.sql to load sample data, or add your own.";
+    }
+    $("dataNote").innerHTML = note ? `<div class="warn">${esc(note)}</div>` : "";
 
     const warns = [...data.warnings, ...data.unassigned.map((s) => `Not assigned: ${s.name} (${s.school})`)];
     $("warnings").innerHTML = warns.length

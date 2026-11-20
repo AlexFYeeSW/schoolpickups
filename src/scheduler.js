@@ -12,7 +12,7 @@ export function weekdayOf(dateStr) {
 export function travel(matrix, a, b) {
   if (a === b) return 0;
   const t = matrix[a]?.[b] ?? matrix[b]?.[a];
-  if (t == null) throw new Error(`No travel time between ${a} and ${b}`);
+  if (t == null) throw new Error(`No driving time saved between "${a}" and "${b}". Add it to the travel_times table.`);
   return t;
 }
 
@@ -48,7 +48,9 @@ export function assignRoutes(roster, travelMatrix, baseId = "base") {
   const { schools, students, drivers } = roster;
   const warnings = [];
 
-  const state = drivers.map((d) => ({
+  // Sort inputs by name so the result doesn't depend on the order data arrives in.
+  const byName = (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+  const state = [...drivers].sort(byName).map((d) => ({
     driver: d,
     location: baseId,
     time: null, // minutes after midnight; null = hasn't left yet
@@ -57,21 +59,33 @@ export function assignRoutes(roster, travelMatrix, baseId = "base") {
   }));
 
   const bySchool = new Map();
-  for (const s of students) {
+  for (const s of [...students].sort(byName)) {
     if (!bySchool.has(s.schoolId)) bySchool.set(s.schoolId, []);
     bySchool.get(s.schoolId).push(s);
   }
 
+  // Students whose school is unknown or has no dismissal time today can't be scheduled.
+  const unassigned = [];
+  const schoolIds = new Set(schools.map((s) => s.id));
+  for (const [schoolId, list] of bySchool) {
+    const school = schools.find((s) => s.id === schoolId);
+    if (!schoolIds.has(schoolId)) {
+      warnings.push(`${list.length} student(s) are linked to an unknown school "${schoolId}".`);
+      unassigned.push(...list);
+    } else if (school.dismissalToday == null) {
+      warnings.push(`${school.name} has no dismissal time for today; its students aren't scheduled.`);
+      unassigned.push(...list);
+    }
+  }
+
   const order = schools
     .filter((s) => bySchool.has(s.id) && s.dismissalToday != null)
-    .sort((a, b) => a.dismissalToday - b.dismissalToday);
+    .sort((a, b) => a.dismissalToday - b.dismissalToday || a.name.localeCompare(b.name));
 
   if (state.length === 0 && students.length > 0) {
     warnings.push("No drivers are available today.");
     return { routes: [], unassigned: students, warnings };
   }
-
-  const unassigned = [];
 
   for (const school of order) {
     const waiting = [...bySchool.get(school.id)];

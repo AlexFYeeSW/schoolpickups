@@ -61,17 +61,29 @@ npm run dev        # http://localhost:8787
 Trigger the 12 PM job by hand: `curl "http://localhost:8787/__scheduled?cron=0+20+*+*+1-5"`.
 It only acts when it is actually 12 PM in `TIMEZONE`.
 
-## Later: secrets
+## Supabase (database)
 
-Set these on the Worker (never commit them):
+1. In the Supabase SQL Editor, run `supabase/schema.sql` (creates the tables),
+   then optionally `supabase/seed.sql` (loads the made-up sample data). Both
+   are safe to run more than once.
+2. In Cloudflare: Worker → Settings → Variables and Secrets, add as **Secret**:
+   - `SUPABASE_URL`: e.g. `https://<project>.supabase.co`
+   - `SUPABASE_SECRET_KEY`: Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`)
+3. Check `/api/health` shows `"database": "connected"`.
 
-```bash
-npx wrangler secret put NVIDIA_API_KEY
-npx wrangler secret put SUPABASE_URL
-npx wrangler secret put SUPABASE_SERVICE_KEY
-```
+The publishable key (`SUPABASE_PUBLISHABLE_KEY`) isn't used: row-level security
+is on for every table with no public policies, so it can't read student data.
+The secret key stays on Cloudflare's servers and never reaches the browser.
 
-The database tables are in `supabase/schema.sql`.
+Until the secret key is set, the site uses `src/sample-data.js` and says so.
+Daily changes stored in the `exceptions` table (with `confirmed = true`) are
+applied for everyone, including driver links. Changes applied on the page are
+still saved in that browser only.
+
+## Secrets
+
+Set on the Worker (Cloudflare dashboard, type Secret, or `npx wrangler secret put NAME`):
+`NVIDIA_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`. Never commit them.
 
 ## Before using real student data
 
