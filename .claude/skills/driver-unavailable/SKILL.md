@@ -15,6 +15,10 @@ explained, and recorded correctly.
 - A driver opens their link (`/?driver=<id>`) and clicks **I can't work this
   day**. The page first calls `POST /api/driver-unavailable` with
   `preview: true` to show the effect, then again without it to save.
+- Staff can also do it from the Manage page (`/manage.html` → Drivers →
+  Days off, staff login required): `POST /api/admin/days-off` (with
+  `preview`), `GET /api/admin/days-off` (upcoming), and
+  `POST /api/admin/days-off/undo`.
 - Saving inserts a confirmed `driver_off` row in the Supabase `exceptions`
   table (`markDriverOff` in `src/db.js`). Every page and driver link then
   shows the rebuilt schedule. **I can work after all** calls
@@ -59,7 +63,8 @@ explained, and recorded correctly.
    website, it is already saved. Otherwise, either:
    - give the user the SQL the script prints, to run in the Supabase SQL
      Editor; or
-   - tell them to have the driver click the button on their link.
+   - tell them to have the driver click the button on their link; or
+   - tell them to use Manage → Drivers → Days off (staff login).
 
    Never write to the database yourself without explicit confirmation, and
    never put database keys in code or chat.
@@ -68,7 +73,9 @@ explained, and recorded correctly.
 
 - Assignment rules: `assignRoutes` in `src/scheduler.js` (`MAX_WAIT_MINUTES`
   controls how long students may wait after dismissal before a warning).
-- Endpoints: `/api/driver-unavailable` and `/api/driver-available` in
-  `src/index.js`. Page panel: `renderDriverPanel` in `public/index.html`.
+- Endpoints: `/api/driver-unavailable`, `/api/driver-available` and the staff
+  `/api/admin/days-off` routes in `src/index.js` (shared logic in
+  `markUnavailable` / `markAvailable`). Pages: `renderDriverPanel` in
+  `public/index.html`; the Days off panel in `public/manage.html`.
 - Tests: `test/reschedule.test.js`. Run `npm test` before pushing; every push
   to `main` deploys the site.

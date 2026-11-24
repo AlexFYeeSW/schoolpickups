@@ -82,6 +82,10 @@ confirm. Everyone's schedule rebuilds with the remaining drivers, including
 second trips if cars are full; students who can't be covered are listed under
 "Needs attention". **I can work after all** undoes it. Requires the database.
 
+Staff can do the same from **Manage → Drivers → Days off**: pick a driver and
+a date, **Preview** (who takes their students, uncovered students, long
+waits), then **Confirm**. Upcoming days off are listed there with **Undo**.
+
 In Claude Code, the project skill `.claude/skills/driver-unavailable/` covers
 the same situation; preview from the command line with
 `node .claude/skills/driver-unavailable/scripts/reschedule.mjs --driver "Driver B" --date tomorrow`.

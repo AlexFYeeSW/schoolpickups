@@ -61,6 +61,13 @@
     .item .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
     .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
     .count { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    .off-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); align-items: end; margin-top: 12px; }
+    .preview { margin-top: 12px; border-radius: 8px; padding: 10px 14px; background: var(--soft); }
+    .preview.bad { background: var(--warn-bg); color: var(--warn); }
+    .preview ul { margin: 6px 0 0; padding-left: 20px; }
+    .offlist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+    .offlist li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 8px 12px; border-radius: 8px; background: var(--soft); }
+    .offlist li .main { flex: 1 1 200px; min-width: 0; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -93,6 +100,20 @@
 
     <!-- Drivers -->
     <section id="drivers">
+      <section class="panel" id="daysOff">
+        <h2>Days off</h2>
+        <p class="sub" style="font-size:13px">Mark a driver as unavailable for a day. Their students are given to the other drivers.</p>
+        <form class="off-form" id="offForm">
+          <label>Driver <select name="driver" required></select></label>
+          <label>Date <input type="date" name="date" required></label>
+          <div><button class="primary" type="submit">Preview</button></div>
+        </form>
+        <div id="offPreview"></div>
+        <span class="status" id="offStatus"></span>
+        <h2 style="font-size:15px;margin-top:16px">Upcoming days off</h2>
+        <ul class="offlist" id="offList"></ul>
+      </section>
+
       <div class="toolbar">
         <button class="primary" id="addDriver">Add driver</button>
         <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="showInactiveDrivers"> Show inactive</label>
@@ -192,7 +213,7 @@
     if (!s.loggedIn) return showLogin();
     $("loginPanel").hidden = true; $("app").hidden = false; $("logoutBtn").hidden = false;
     showTab(location.hash === "#students" ? "students" : "drivers");
-    await Promise.all([loadDrivers(), loadStudents()]);
+    await Promise.all([loadDrivers(), loadStudents(), loadDaysOff()]);
   }
   $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -219,9 +240,85 @@
 
   // ---------- drivers ----------
   async function loadDrivers() {
-    try { drivers = (await api("GET", "/api/admin/drivers")).drivers.sort(byName); renderDrivers(); }
+    try { drivers = (await api("GET", "/api/admin/drivers")).drivers.sort(byName); renderDrivers(); renderOffDrivers(); }
     catch (e) { setStatus($("driverStatus"), e.message, "err"); }
   }
+
+  // ---------- days off ----------
+  const fmtDate = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function nextWeekday() {
+    const d = new Date();
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function renderOffDrivers() {
+    const sel = $("offForm").driver, keep = sel.value;
+    sel.innerHTML = drivers.filter((d) => d.active).map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+    if (keep) sel.value = keep;
+    const date = $("offForm").date;
+    date.min = todayLocal();
+    if (!date.value) date.value = nextWeekday();
+  }
+  async function loadDaysOff() {
+    try {
+      const { daysOff } = await api("GET", "/api/admin/days-off");
+      $("offList").innerHTML = daysOff.length
+        ? daysOff.map((o) => `<li><div class="main"><strong>${esc(o.driverName)}</strong> · ${esc(fmtDate(o.date))}
+            <div class="meta">${esc(o.note)}</div></div>
+            <button class="link" data-undo="${esc(o.driverId)}" data-date="${esc(o.date)}">Undo</button></li>`).join("")
+        : `<li><span class="meta">No upcoming days off.</span></li>`;
+    } catch (e) { setStatus($("offStatus"), e.message, "err"); }
+  }
+  function previewHtml(r) {
+    const moved = r.moved.filter((m) => m.to).map((m) => `<li>${esc(m.student)} (${esc(m.school)}) → ${esc(m.to)} at ${esc(m.pickupTime)}</li>`).join("");
+    const uncovered = r.unassigned.map((u) => `<li>${esc(u.name)} (${esc(u.school)})</li>`).join("");
+    const waits = (r.warnings || []).map((w) => `<li>${esc(w)}</li>`).join("");
+    return `<div class="preview ${r.allCovered && !waits ? "" : "bad"}"><strong>${esc(r.summary)}</strong>
+      ${waits ? `<div style="margin-top:8px"><strong>Check:</strong><ul>${waits}</ul></div>` : ""}
+      ${moved ? `<details style="margin-top:8px"><summary>Students moved (${r.moved.filter((m) => m.to).length})</summary><ul>${moved}</ul></details>` : ""}
+      ${uncovered ? `<div style="margin-top:8px"><strong>Not covered:</strong><ul>${uncovered}</ul></div>` : ""}
+      ${r.scheduledToWork ? `<div class="row"><button class="primary" id="offConfirm">Confirm day off</button><button type="button" id="offCancel">Cancel</button></div>` : ""}
+    </div>`;
+  }
+  let pendingOff = null;
+  $("offForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    pendingOff = { driverId: f.driver.value, date: f.date.value };
+    setStatus($("offStatus"), "Checking…");
+    $("offPreview").innerHTML = "";
+    try {
+      const r = await api("POST", "/api/admin/days-off", { ...pendingOff, preview: true });
+      setStatus($("offStatus"), "");
+      $("offPreview").innerHTML = previewHtml(r);
+    } catch (err) { setStatus($("offStatus"), err.message, "err"); }
+  });
+  $("offPreview").addEventListener("click", async (e) => {
+    if (e.target.id === "offCancel") { $("offPreview").innerHTML = ""; return; }
+    if (e.target.id !== "offConfirm" || !pendingOff) return;
+    e.target.disabled = true;
+    try {
+      const r = await api("POST", "/api/admin/days-off", pendingOff);
+      $("offPreview").innerHTML = "";
+      setStatus($("offStatus"), r.saved ? `Saved: ${r.summary}` : r.summary, r.allCovered ? "ok" : "err");
+      await loadDaysOff();
+    } catch (err) { setStatus($("offStatus"), err.message, "err"); e.target.disabled = false; }
+  });
+  $("offList").addEventListener("click", async (e) => {
+    const id = e.target.dataset.undo, date = e.target.dataset.date;
+    if (!id) return;
+    const name = drivers.find((d) => d.id === id)?.name || id;
+    if (!confirm(`Undo the day off for ${name} on ${fmtDate(date)}? They'll be back on that day's schedule.`)) return;
+    try {
+      await api("POST", "/api/admin/days-off/undo", { driverId: id, date });
+      setStatus($("offStatus"), `${name} is back on the schedule for ${fmtDate(date)}.`, "ok");
+      await loadDaysOff();
+    } catch (err) { setStatus($("offStatus"), err.message, "err"); }
+  });
   function renderDrivers() {
     const showAll = $("showInactiveDrivers").checked;
     const list = drivers.filter((d) => showAll || d.active);

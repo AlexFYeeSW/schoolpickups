@@ -1,5 +1,5 @@
 import { buildDailySchedule } from "./scheduler.js";
-import { loadData as loadFromDb, dbStatus, DbError, markDriverOff, clearDriverOff } from "./db.js";
+import { loadData as loadFromDb, dbStatus, DbError, markDriverOff, clearDriverOff, listUpcomingDaysOff } from "./db.js";
 import { rescheduleWithoutDriver } from "./reschedule.js";
 import { travelStatus, refreshTravelTimes, MapsError } from "./maps.js";
 import { staffLoginEnabled, checkPassword, sessionCookie, clearCookie, isStaff } from "./auth.js";
@@ -192,42 +192,15 @@ async function handle(request, env) {
   }
 
   // POST {driverId, date, preview?} → a driver reports they can't work that day.
-  // The schedule is rebuilt with the remaining drivers. With preview: true,
-  // nothing is saved; the page uses this to show the effect before confirming.
   if (path === "/api/driver-unavailable" && request.method === "POST") {
-    const body = await readBody(request);
-    const date = body?.date;
-    const driverId = typeof body?.driverId === "string" ? body.driverId : "";
-    if (!DATE_RE.test(date ?? "") || Number.isNaN(Date.parse(date))) return json({ error: "date must be YYYY-MM-DD" }, 400);
-    if (!driverId) return json({ error: "driverId is required" }, 400);
-    if (date < localNow(env.TIMEZONE).date) return json({ error: "That day has already passed." }, 400);
     if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
-
-    const data = await loadData(env);
-    if (!data.drivers.some((d) => d.id === driverId)) return json({ error: "Unknown driver." }, 404);
-    const result = rescheduleWithoutDriver(data, driverId, date);
-    const { before, after, ...report } = result;
-
-    if (body.preview) return json({ ...report, saved: false });
-    if (!result.scheduledToWork) return json({ ...report, saved: false });
-    if (data.source !== "supabase") {
-      return json({ ...report, saved: false, error: "Can't save: the database isn't connected, so other people wouldn't see this. Tell the office directly." }, 503);
-    }
-    await markDriverOff(env, driverId, date, "Reported by the driver on the website");
-    console.log(`Driver unavailable: ${result.summary}`);
-    return json({ ...report, saved: true });
+    return markUnavailable(env, await readBody(request), "Reported by the driver on the website");
   }
 
   // POST {driverId, date} → undo: the driver can work after all.
   if (path === "/api/driver-available" && request.method === "POST") {
-    const body = await readBody(request);
-    if (!DATE_RE.test(body?.date ?? "") || typeof body?.driverId !== "string") {
-      return json({ error: "driverId and date (YYYY-MM-DD) are required" }, 400);
-    }
-    if (dbStatus(env) !== "connected") return json({ error: "The database isn't connected." }, 503);
     if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
-    const { removed } = await clearDriverOff(env, body.driverId, body.date);
-    return json({ ok: true, removed });
+    return markAvailable(env, await readBody(request));
   }
 
   if (path === "/api/driver-message" && request.method === "POST") {
@@ -244,6 +217,43 @@ async function handle(request, env) {
 
   if (path.startsWith("/api/")) return json({ error: "Not found" }, 404);
   return env.ASSETS.fetch(request);
+}
+
+// ---------- driver days off (used by driver links and the Manage page) ----------
+
+/**
+ * Mark a driver as not working on a date and rebuild the schedule with the
+ * remaining drivers. With preview: true nothing is saved; pages use this to
+ * show who takes the students and whether everyone is still covered.
+ */
+async function markUnavailable(env, body, note, headers = {}) {
+  const date = body?.date;
+  const driverId = typeof body?.driverId === "string" ? body.driverId : "";
+  if (!DATE_RE.test(date ?? "") || Number.isNaN(Date.parse(date))) return json({ error: "Pick a date." }, 400, headers);
+  if (!driverId) return json({ error: "Pick a driver." }, 400, headers);
+  if (date < localNow(env.TIMEZONE).date) return json({ error: "That day has already passed." }, 400, headers);
+
+  const data = await loadData(env);
+  if (!data.drivers.some((d) => d.id === driverId)) return json({ error: "Unknown driver." }, 404, headers);
+  const { before, after, ...report } = rescheduleWithoutDriver(data, driverId, date);
+
+  if (body.preview || !report.scheduledToWork) return json({ ...report, saved: false }, 200, headers);
+  if (data.source !== "supabase") {
+    return json({ ...report, saved: false, error: "Can't save: the database isn't connected, so other people wouldn't see this." }, 503, headers);
+  }
+  await markDriverOff(env, driverId, date, note);
+  console.log(`Driver unavailable (${note}): ${report.summary}`);
+  return json({ ...report, saved: true }, 200, headers);
+}
+
+/** Undo a day off: the driver can work after all. */
+async function markAvailable(env, body, headers = {}) {
+  if (!DATE_RE.test(body?.date ?? "") || typeof body?.driverId !== "string") {
+    return json({ error: "driverId and date (YYYY-MM-DD) are required" }, 400, headers);
+  }
+  if (dbStatus(env) !== "connected") return json({ error: "The database isn't connected." }, 503, headers);
+  const { removed } = await clearDriverOff(env, body.driverId, body.date);
+  return json({ ok: true, removed }, 200, headers);
 }
 
 // ---------- staff login + Manage page (drivers, students) ----------
@@ -268,6 +278,17 @@ async function handleStaff(request, env, path) {
 
   // Everything under /api/admin/ needs a staff login.
   if (!(await isStaff(request, env))) return json({ error: "Please log in as staff." }, 401, noStore);
+
+  // Days off: list upcoming, mark (with preview), undo.
+  if (path === "/api/admin/days-off" && request.method === "GET") {
+    return json({ daysOff: await listUpcomingDaysOff(env, localNow(env.TIMEZONE).date) }, 200, noStore);
+  }
+  if (path === "/api/admin/days-off" && request.method === "POST") {
+    return markUnavailable(env, await readBody(request), "Marked by staff on the Manage page", noStore);
+  }
+  if (path === "/api/admin/days-off/undo" && request.method === "POST") {
+    return markAvailable(env, await readBody(request), noStore);
+  }
 
   const m = /^\/api\/admin\/(drivers|students)(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(path);
   if (!m) return json({ error: "Not found" }, 404, noStore);

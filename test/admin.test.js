@@ -126,3 +126,32 @@ test("logged-in staff can add and update records", async () => {
   assert.equal(patch.path, "/rest/v1/students?id=eq.stu_1");
   assert.deepEqual(patch.body, { active: false });
 });
+
+// ---------- days off (Manage page) ----------
+test("days-off routes need a staff login", async () => {
+  globalThis.fetch = () => { throw new Error("must not reach Supabase"); };
+  for (const [path, method] of [["/api/admin/days-off", "GET"], ["/api/admin/days-off", "POST"], ["/api/admin/days-off/undo", "POST"]]) {
+    const res = await worker.fetch(req(path, { method, body: method === "GET" ? undefined : { driverId: "d1", date: "2030-01-07" } }), env);
+    assert.equal(res.status, 401, `${method} ${path}`);
+  }
+});
+
+test("upcoming days off are listed with driver names, soonest first", async () => {
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const u = new URL(url);
+    calls.push(u.pathname + u.search);
+    if (u.pathname.endsWith("/exceptions")) {
+      return new Response(JSON.stringify([
+        { driver_id: "d2", date: "2026-12-03", source_text: "Marked by staff on the Manage page", created_at: "2026-11-30T18:00:00Z" },
+        { driver_id: "d1", date: "2026-12-01", source_text: "Reported by the driver on the website", created_at: "2026-11-30T17:00:00Z" },
+      ]));
+    }
+    return new Response(JSON.stringify([{ id: "d1", name: "Ann" }, { id: "d2", name: "Bo" }]));
+  };
+  const login = await worker.fetch(req("/api/login", { method: "POST", body: { password: env.STAFF_PASSWORD } }), env);
+  const res = await worker.fetch(req("/api/admin/days-off", { cookie: cookieFrom(login) }), env);
+  const { daysOff } = await res.json();
+  assert.deepEqual(daysOff.map((d) => [d.driverName, d.date]), [["Ann", "2026-12-01"], ["Bo", "2026-12-03"]]);
+  assert.ok(calls.some((c) => /exceptions\?.*type=eq\.driver_off&confirmed=eq\.true&date=gte\.\d{4}-\d{2}-\d{2}/.test(c)));
+});

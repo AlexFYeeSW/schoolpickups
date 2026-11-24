@@ -216,3 +216,15 @@ export async function countRefreshesSince(env, sinceIso) {
 export async function logRefresh(env, routes, trigger) {
   await rest(env, "travel_refreshes", { method: "POST", body: { routes, trigger }, prefer: "return=minimal" });
 }
+
+/** Drivers marked off from `fromDate` onward, with driver names, soonest first. */
+export async function listUpcomingDaysOff(env, fromDate) {
+  const [rows, drivers] = await Promise.all([
+    select(env, "exceptions", `select=driver_id,date,source_text,created_at&type=eq.driver_off&confirmed=eq.true&date=gte.${fromDate}&order=date`),
+    select(env, "drivers", "select=id,name"),
+  ]);
+  const name = new Map(drivers.map((d) => [d.id, d.name]));
+  return rows
+    .map((r) => ({ driverId: r.driver_id, driverName: name.get(r.driver_id) || r.driver_id, date: r.date, note: r.source_text || "", createdAt: r.created_at }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.driverName.localeCompare(b.driverName));
+}
