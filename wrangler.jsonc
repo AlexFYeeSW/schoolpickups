@@ -30,7 +30,10 @@
     "TRAFFIC_DEPARTURE": "15:00",
     "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct",
     // Not secret: the project's public address. The key is the SUPABASE_SECRET_KEY secret.
-    "SUPABASE_URL": "https://qdghsjanijuzneukvhwt.supabase.co"
+    "SUPABASE_URL": "https://qdghsjanijuzneukvhwt.supabase.co",
+    // The afterschool center's address: start and end point for every driver,
+    // used to look up driving times from Google.
+    "CENTER_ADDRESS": "228 S. Glendora Avenue, West Covina, CA 91790"
   },
 
   // At most 30 AI requests per minute per visitor (protects the Nvidia bill).
@@ -42,5 +45,4 @@
 
   // Secrets (set in the Cloudflare dashboard as type Secret, never in this file):
   //   NVIDIA_API_KEY, SUPABASE_SECRET_KEY, GOOGLE_MAPS_API_KEY, STAFF_PASSWORD
-  // Variable set in the dashboard: CENTER_ADDRESS (the center's street address).
 }
