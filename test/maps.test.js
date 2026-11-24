@@ -149,7 +149,7 @@ test("Google's real invalid-key reply (error wrapped in a list) is explained", a
   }], 400);
   await assert.rejects(
     fetchDrivingMatrix({ GOOGLE_MAPS_API_KEY: "bad" }, places, new Date()),
-    /API key isn't valid\. Check the GOOGLE_MAPS_API_KEY secret\. Google said: "API key not valid/,
+    /API key isn't valid\. Check the GOOGLE_MAPS_API_KEY secret in Cloudflare\. Google said: "API key not valid.*\[API_KEY_INVALID\]/,
   );
 });
 
@@ -170,4 +170,25 @@ test("more than 10 places are split into requests of at most 100 routes", async 
   assert.equal(r.rows.length, 11 * 10, "every pair in both directions, none missing or duplicated");
   assert.equal(new Set(r.rows.map((x) => `${x.from_id}>${x.to_id}`)).size, 110);
   assert.ok(r.rows.some((x) => x.from_id === "s10" && x.to_id === "base"), "origins in the second batch are mapped correctly");
+});
+
+test("Google's reason codes become specific fixes", async () => {
+  const cases = [
+    ["SERVICE_DISABLED", 403, /isn't turned on in the Google Cloud project that owns this key/],
+    ["API_KEY_SERVICE_BLOCKED", 403, /API restrictions don't allow the Routes API/],
+    ["BILLING_DISABLED", 403, /Billing isn't turned on/],
+    ["API_KEY_HTTP_REFERRER_BLOCKED", 403, /Application restrictions to None/],
+  ];
+  for (const [reason, code, re] of cases) {
+    globalThis.fetch = async () => json([{ error: { code, message: "Permission denied on the service.", status: "PERMISSION_DENIED",
+      details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason }] } }], code);
+    await assert.rejects(fetchDrivingMatrix({ GOOGLE_MAPS_API_KEY: "k" }, places, new Date()), (err) => {
+      assert.match(err.message, re, reason);
+      assert.ok(err.message.includes(`[${reason}]`), "shows the code");
+      return true;
+    });
+  }
+  // No reason code: general advice lists the most likely causes.
+  globalThis.fetch = async () => json([{ error: { code: 403, message: "Permission denied on the service." } }], 403);
+  await assert.rejects(fetchDrivingMatrix({ GOOGLE_MAPS_API_KEY: "k" }, places, new Date()), /API restrictions don't include Routes API/);
 });

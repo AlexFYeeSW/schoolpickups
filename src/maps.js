@@ -56,14 +56,27 @@ export function nextWeekdayDeparture(timeZone, hhmm = DEFAULT_DEPARTURE, now = n
   throw new Error("Couldn't find a weekday departure time");
 }
 
+// Google's machine-readable reasons (ErrorInfo.reason) → what to fix.
+const REASON_HELP = {
+  API_KEY_INVALID: "The API key isn't valid. Check the GOOGLE_MAPS_API_KEY secret in Cloudflare.",
+  SERVICE_DISABLED: "The Routes API isn't turned on in the Google Cloud project that owns this key. Open that project → APIs & Services → Library → Routes API → Enable, then wait a few minutes.",
+  API_KEY_SERVICE_BLOCKED: "The key's API restrictions don't allow the Routes API. In Google Cloud → APIs & Services → Credentials → this key → API restrictions, tick Routes API and save, then wait a few minutes.",
+  BILLING_DISABLED: "Billing isn't turned on for the Google Cloud project that owns this key. Link a billing account to that project.",
+  API_KEY_HTTP_REFERRER_BLOCKED: "The key only allows certain websites. Set Application restrictions to None (the requests come from Cloudflare's servers, not a browser).",
+  API_KEY_IP_ADDRESS_BLOCKED: "The key only allows certain IP addresses. Set Application restrictions to None (Cloudflare's server addresses change).",
+  CONSUMER_INVALID: "The Google Cloud project that owns this key can't be used (it may be deleted or suspended).",
+  RATE_LIMIT_EXCEEDED: "Google's usage limit for this key was reached. Try again later or raise the quota.",
+};
+
 function friendly(status, message, reason) {
   const said = message ? ` Google said: "${message}"` : "";
-  if (reason === "API_KEY_INVALID") return `Google says the API key isn't valid. Check the GOOGLE_MAPS_API_KEY secret.${said}`;
-  if (status === 400) return `Google rejected the request (400). An address may be invalid.${said}`;
+  const code = reason ? ` [${reason}]` : "";
+  if (reason && REASON_HELP[reason]) return `${REASON_HELP[reason]}${said}${code}`;
+  if (status === 400) return `Google rejected the request (400). An address may be invalid.${said}${code}`;
   if (status === 401 || status === 403)
-    return `Google refused the API key (${status}). Check that the Routes API is enabled for the key's project, billing is set up, and the key isn't restricted to other APIs or websites.${said}`;
-  if (status === 429) return "Google's usage limit was reached (429). Try again later.";
-  return `Google Routes returned an error (${status}).${said}`;
+    return `Google refused the API key (${status}). Most often: the key's API restrictions don't include Routes API, or the Routes API is enabled in a different project than the key's. Also check billing is on.${said}${code}`;
+  if (status === 429) return `Google's usage limit was reached (429). Try again later.${code}`;
+  return `Google Routes returned an error (${status}).${said}${code}`;
 }
 
 /** Durations like "534s" → whole minutes, rounded up. */
