@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Manage Drivers & Students</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6676;
+      --line: #e3e6eb; --accent: #2457c5; --accent-text: #ffffff;
+      --warn-bg: #fff4e0; --warn: #8a5300; --ok-bg: #e7f5ec; --ok: #1d6b3a; --soft: #eef2fb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151b; --card: #1b2029; --text: #e7eaf0; --muted: #9aa3b2;
+        --line: #2c3340; --accent: #7aa2ff; --accent-text: #0d1220;
+        --warn-bg: #3a2a10; --warn: #f3c37a; --ok-bg: #12301f; --ok: #8fd9a8; --soft: #222a38;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+    h1 { margin: 0; font-size: 22px; }
+    h2 { margin: 0; font-size: 17px; }
+    a { color: var(--accent); }
+    .sub { color: var(--muted); margin: 4px 0 0; }
+    label { color: var(--muted); font-size: 13px; display: grid; gap: 4px; }
+    input, select, textarea { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+      background: var(--card); color: var(--text); width: 100%; min-width: 0; }
+    input[type="checkbox"] { width: auto; }
+    button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--line); background: var(--card); color: var(--text); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    button:disabled { opacity: .6; cursor: default; }
+    button.link { border: 0; background: none; color: var(--accent); padding: 0 4px; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 20px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; min-width: 0; }
+    .status { color: var(--muted); font-size: 14px; }
+    .status.err { color: var(--warn); }
+    .status.ok { color: var(--ok); }
+    .warn { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-top: 16px; }
+    .tabs { display: flex; gap: 4px; margin-top: 20px; border-bottom: 1px solid var(--line); }
+    .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--muted); }
+    .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+    .toolbar .grow { flex: 1 1 200px; }
+    .form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-top: 12px; }
+    .form .wide { grid-column: 1 / -1; }
+    .days { display: flex; flex-wrap: wrap; gap: 10px; color: var(--text); font-size: 14px; }
+    .days label { display: inline-flex; gap: 4px; align-items: center; color: var(--text); font-size: 14px; }
+    .list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+    .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+      display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+    .item.inactive { opacity: .6; }
+    .item .main { flex: 1 1 220px; min-width: 0; }
+    .item .name { font-weight: 600; }
+    .item .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    .item .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .count { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Manage</h1>
+      <p class="sub"><a href="/">← Back to schedule</a></p>
+    </div>
+    <button id="logoutBtn" hidden>Log out</button>
+  </header>
+
+  <div id="notice"></div>
+
+  <section class="panel" id="loginPanel" hidden>
+    <h2>Staff login</h2>
+    <form id="loginForm" class="row">
+      <input type="password" id="password" autocomplete="current-password" placeholder="Staff password" style="max-width:260px" required>
+      <button class="primary" type="submit">Log in</button>
+      <span class="status" id="loginStatus"></span>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-drivers" aria-selected="true">Drivers</button>
+      <button role="tab" id="tab-students" aria-selected="false">Students</button>
+    </div>
+
+    <!-- Drivers -->
+    <section id="drivers">
+      <div class="toolbar">
+        <button class="primary" id="addDriver">Add driver</button>
+        <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="showInactiveDrivers"> Show inactive</label>
+        <span class="status" id="driverStatus"></span>
+      </div>
+      <form class="panel" id="driverForm" hidden>
+        <h2 id="driverFormTitle">Add driver</h2>
+        <div class="form">
+          <label>Name <input name="name" maxlength="100" required></label>
+          <label>Seats for students <input name="seats" type="number" min="1" max="15" value="6" required></label>
+          <label>Phone <input name="phone" type="tel" maxlength="30"></label>
+          <label>Email <input name="email" type="email" maxlength="120"></label>
+          <div class="wide"><span class="sub" style="font-size:13px">Works on</span><div class="days" data-days></div></div>
+        </div>
+        <div class="row">
+          <button class="primary" type="submit">Save</button>
+          <button type="button" data-cancel>Cancel</button>
+          <span class="status" data-status></span>
+        </div>
+      </form>
+      <ul class="list" id="driverList"></ul>
+      <p class="count" id="driverCount"></p>
+    </section>
+
+    <!-- Students -->
+    <section id="students" hidden>
+      <div class="toolbar">
+        <button class="primary" id="addStudent">Add student</button>
+        <input class="grow" type="search" id="studentSearch" placeholder="Search by name">
+        <select id="schoolFilter" style="max-width:240px"><option value="">All schools</option></select>
+        <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="showInactiveStudents"> Show inactive</label>
+      </div>
+      <span class="status" id="studentStatus"></span>
+      <form class="panel" id="studentForm" hidden>
+        <h2 id="studentFormTitle">Add student</h2>
+        <div class="form">
+          <label>Name <input name="name" maxlength="100" required></label>
+          <label>School <select name="school_id" required></select></label>
+          <label class="wide">Guardian contact <input name="guardian_contact" maxlength="200" placeholder="Name and phone"></label>
+          <label class="wide">Notes for drivers <input name="notes" maxlength="200" placeholder="e.g. Booster seat"></label>
+          <div class="wide"><span class="sub" style="font-size:13px">Picked up on</span><div class="days" data-days></div></div>
+        </div>
+        <div class="row">
+          <button class="primary" type="submit">Save</button>
+          <button type="button" data-cancel>Cancel</button>
+          <span class="status" data-status></span>
+        </div>
+      </form>
+      <ul class="list" id="studentList"></ul>
+      <p class="count" id="studentCount"></p>
+    </section>
+  </div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const DAYS = [["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"], ["fri", "Fri"]];
+  let drivers = [], students = [], schools = [];
+  let editingDriver = null, editingStudent = null;
+
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  async function api(method, url, body) {
+    const res = await fetch(url, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ error: "Unexpected response" }));
+    if (res.status === 401 && url.startsWith("/api/admin/")) showLogin();
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    return data;
+  }
+  function setStatus(el, text, kind = "") { el.className = `status ${kind}`; el.textContent = text; }
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const dayLabel = (list) => list?.length === 5 ? "Mon–Fri" : DAYS.filter(([d]) => list?.includes(d)).map(([, l]) => l).join(", ");
+
+  // Day checkboxes in both forms
+  for (const box of document.querySelectorAll("[data-days]")) {
+    box.innerHTML = DAYS.map(([d, l]) => `<label><input type="checkbox" value="${d}" checked> ${l}</label>`).join("");
+  }
+  const getDays = (form) => [...form.querySelectorAll("[data-days] input:checked")].map((i) => i.value);
+  const setDays = (form, list) => form.querySelectorAll("[data-days] input").forEach((i) => { i.checked = list.includes(i.value); });
+
+  // ---------- login ----------
+  function showLogin() { $("loginPanel").hidden = false; $("app").hidden = true; $("logoutBtn").hidden = true; }
+  async function start() {
+    let s;
+    try { s = await api("GET", "/api/session"); } catch (e) { $("notice").innerHTML = `<div class="warn">${esc(e.message)}</div>`; return; }
+    if (!s.enabled) {
+      $("notice").innerHTML = `<div class="warn">Editing is switched off until a staff password is set. In Cloudflare, add a <strong>STAFF_PASSWORD</strong> secret to the Worker.</div>`;
+      return;
+    }
+    if (s.database !== "connected") {
+      $("notice").innerHTML = `<div class="warn">The database isn't connected, so drivers and students can't be saved. Add the SUPABASE_SECRET_KEY secret in Cloudflare.</div>`;
+    }
+    if (!s.loggedIn) return showLogin();
+    $("loginPanel").hidden = true; $("app").hidden = false; $("logoutBtn").hidden = false;
+    showTab(location.hash === "#students" ? "students" : "drivers");
+    await Promise.all([loadDrivers(), loadStudents()]);
+  }
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setStatus($("loginStatus"), "Checking…");
+    try {
+      await api("POST", "/api/login", { password: $("password").value });
+      $("password").value = "";
+      setStatus($("loginStatus"), "");
+      start();
+    } catch (err) { setStatus($("loginStatus"), err.message, "err"); }
+  });
+  $("logoutBtn").addEventListener("click", async () => { await api("POST", "/api/logout").catch(() => {}); showLogin(); });
+
+  // ---------- tabs ----------
+  function showTab(name) {
+    for (const t of ["drivers", "students"]) {
+      $(t).hidden = t !== name;
+      $(`tab-${t}`).setAttribute("aria-selected", String(t === name));
+    }
+    history.replaceState(null, "", `#${name}`);
+  }
+  $("tab-drivers").addEventListener("click", () => showTab("drivers"));
+  $("tab-students").addEventListener("click", () => showTab("students"));
+
+  // ---------- drivers ----------
+  async function loadDrivers() {
+    try { drivers = (await api("GET", "/api/admin/drivers")).drivers.sort(byName); renderDrivers(); }
+    catch (e) { setStatus($("driverStatus"), e.message, "err"); }
+  }
+  function renderDrivers() {
+    const showAll = $("showInactiveDrivers").checked;
+    const list = drivers.filter((d) => showAll || d.active);
+    $("driverList").innerHTML = list.map((d) => `
+      <li class="item ${d.active ? "" : "inactive"}">
+        <div class="main">
+          <div class="name">${esc(d.name)} ${d.active ? "" : `<span class="tag">inactive</span>`}</div>
+          <div class="meta">${d.seats} seats · ${esc(dayLabel(d.days))}${d.phone ? ` · ${esc(d.phone)}` : ""}${d.email ? ` · ${esc(d.email)}` : ""}</div>
+          <div class="meta">Driver link: <a href="/?driver=${encodeURIComponent(d.id)}">/?driver=${esc(d.id)}</a></div>
+        </div>
+        <div class="actions">
+          <button data-edit="${esc(d.id)}">Edit</button>
+          <button class="link" data-toggle="${esc(d.id)}">${d.active ? "Deactivate" : "Reactivate"}</button>
+        </div>
+      </li>`).join("") || `<li class="meta">No drivers yet.</li>`;
+    const active = drivers.filter((d) => d.active).length;
+    $("driverCount").textContent = `${active} active driver${active === 1 ? "" : "s"}, ${drivers.reduce((n, d) => n + (d.active ? d.seats : 0), 0)} seats in total.`;
+  }
+  function openDriverForm(d) {
+    editingDriver = d?.id || null;
+    const f = $("driverForm");
+    $("driverFormTitle").textContent = d ? `Edit ${d.name}` : "Add driver";
+    f.name.value = d?.name || ""; f.seats.value = d?.seats ?? 6; f.phone.value = d?.phone || ""; f.email.value = d?.email || "";
+    setDays(f, d?.days || DAYS.map(([x]) => x));
+    setStatus(f.querySelector("[data-status]"), "");
+    f.hidden = false; f.name.focus();
+  }
+  $("addDriver").addEventListener("click", () => openDriverForm(null));
+  $("showInactiveDrivers").addEventListener("change", renderDrivers);
+  $("driverForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target, st = f.querySelector("[data-status]");
+    const body = { name: f.name.value, seats: Number(f.seats.value), phone: f.phone.value, email: f.email.value, days: getDays(f) };
+    setStatus(st, "Saving…");
+    try {
+      if (editingDriver) await api("PATCH", `/api/admin/drivers/${encodeURIComponent(editingDriver)}`, body);
+      else await api("POST", "/api/admin/drivers", body);
+      f.hidden = true;
+      setStatus($("driverStatus"), `Saved ${body.name.trim()}.`, "ok");
+      await loadDrivers();
+    } catch (err) { setStatus(st, err.message, "err"); }
+  });
+  $("driverForm").querySelector("[data-cancel]").addEventListener("click", () => { $("driverForm").hidden = true; });
+  $("driverList").addEventListener("click", async (e) => {
+    const id = e.target.dataset.edit || e.target.dataset.toggle;
+    const d = drivers.find((x) => x.id === id);
+    if (!d) return;
+    if (e.target.dataset.edit) return openDriverForm(d);
+    if (d.active && !confirm(`Deactivate ${d.name}? They'll be left out of all future schedules.`)) return;
+    try {
+      await api("PATCH", `/api/admin/drivers/${encodeURIComponent(id)}`, { active: !d.active });
+      setStatus($("driverStatus"), `${d.name} ${d.active ? "deactivated" : "reactivated"}.`, "ok");
+      await loadDrivers();
+    } catch (err) { setStatus($("driverStatus"), err.message, "err"); }
+  });
+
+  // ---------- students ----------
+  async function loadStudents() {
+    try {
+      ({ students, schools } = await api("GET", "/api/admin/students"));
+      students.sort(byName);
+      schools.sort(byName);
+      const opts = schools.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+      $("studentForm").school_id.innerHTML = opts;
+      const keep = $("schoolFilter").value;
+      $("schoolFilter").innerHTML = `<option value="">All schools</option>${opts}`;
+      $("schoolFilter").value = keep;
+      if (!schools.length) setStatus($("studentStatus"), "Add schools in Supabase first (the schools table); students must belong to a school.", "err");
+      renderStudents();
+    } catch (e) { setStatus($("studentStatus"), e.message, "err"); }
+  }
+  function renderStudents() {
+    const q = $("studentSearch").value.trim().toLowerCase();
+    const school = $("schoolFilter").value;
+    const showAll = $("showInactiveStudents").checked;
+    const schoolName = Object.fromEntries(schools.map((s) => [s.id, s.name]));
+    const list = students.filter((s) => (showAll || s.active) && (!school || s.school_id === school) && (!q || s.name.toLowerCase().includes(q)));
+    $("studentList").innerHTML = list.map((s) => `
+      <li class="item ${s.active ? "" : "inactive"}">
+        <div class="main">
+          <div class="name">${esc(s.name)} ${s.active ? "" : `<span class="tag">inactive</span>`}</div>
+          <div class="meta">${esc(schoolName[s.school_id] || s.school_id)} · ${esc(dayLabel(s.days))}${s.notes ? ` · ${esc(s.notes)}` : ""}</div>
+          ${s.guardian_contact ? `<div class="meta">Guardian: ${esc(s.guardian_contact)}</div>` : ""}
+        </div>
+        <div class="actions">
+          <button data-edit="${esc(s.id)}">Edit</button>
+          <button class="link" data-toggle="${esc(s.id)}">${s.active ? "Deactivate" : "Reactivate"}</button>
+        </div>
+      </li>`).join("") || `<li class="meta">No students match.</li>`;
+    const active = students.filter((s) => s.active).length;
+    $("studentCount").textContent = `${active} active student${active === 1 ? "" : "s"}${list.length !== active ? ` · showing ${list.length}` : ""}.`;
+  }
+  function openStudentForm(s) {
+    editingStudent = s?.id || null;
+    const f = $("studentForm");
+    $("studentFormTitle").textContent = s ? `Edit ${s.name}` : "Add student";
+    f.name.value = s?.name || "";
+    f.school_id.value = s?.school_id || $("schoolFilter").value || schools[0]?.id || "";
+    f.guardian_contact.value = s?.guardian_contact || ""; f.notes.value = s?.notes || "";
+    setDays(f, s?.days || DAYS.map(([x]) => x));
+    setStatus(f.querySelector("[data-status]"), "");
+    f.hidden = false; f.name.focus();
+  }
+  $("addStudent").addEventListener("click", () => openStudentForm(null));
+  for (const id of ["studentSearch", "schoolFilter", "showInactiveStudents"]) $(id).addEventListener("input", renderStudents);
+  $("studentForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target, st = f.querySelector("[data-status]");
+    const body = { name: f.name.value, school_id: f.school_id.value, guardian_contact: f.guardian_contact.value, notes: f.notes.value, days: getDays(f) };
+    setStatus(st, "Saving…");
+    try {
+      if (editingStudent) await api("PATCH", `/api/admin/students/${encodeURIComponent(editingStudent)}`, body);
+      else await api("POST", "/api/admin/students", body);
+      f.hidden = true;
+      setStatus($("studentStatus"), `Saved ${body.name.trim()}.`, "ok");
+      await loadStudents();
+    } catch (err) { setStatus(st, err.message, "err"); }
+  });
+  $("studentForm").querySelector("[data-cancel]").addEventListener("click", () => { $("studentForm").hidden = true; });
+  $("studentList").addEventListener("click", async (e) => {
+    const id = e.target.dataset.edit || e.target.dataset.toggle;
+    const s = students.find((x) => x.id === id);
+    if (!s) return;
+    if (e.target.dataset.edit) return openStudentForm(s);
+    if (s.active && !confirm(`Deactivate ${s.name}? They'll be left out of all future schedules.`)) return;
+    try {
+      await api("PATCH", `/api/admin/students/${encodeURIComponent(id)}`, { active: !s.active });
+      setStatus($("studentStatus"), `${s.name} ${s.active ? "deactivated" : "reactivated"}.`, "ok");
+      await loadStudents();
+    } catch (err) { setStatus($("studentStatus"), err.message, "err"); }
+  });
+
+  start();
+</script>
+</body>
+</html>

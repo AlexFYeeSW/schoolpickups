@@ -61,6 +61,18 @@ npm run dev        # http://localhost:8787
 Trigger the 12 PM job by hand: `curl "http://localhost:8787/__scheduled?cron=0+20+*+*+1-5"`.
 It only acts when it is actually 12 PM in `TIMEZONE`.
 
+## Managing drivers and students
+
+`/manage.html` (linked from the staff schedule page) has a **Drivers** tab and
+a **Students** tab to add, edit, deactivate and reactivate records. Changes
+save to Supabase and appear on the schedule right away. Deactivating keeps the
+record (and its history) but leaves it out of future schedules.
+
+It needs a staff login: add a **`STAFF_PASSWORD`** secret in Cloudflare
+(Worker → Settings → Variables and Secrets). Until it is set, editing is off.
+Logins last 12 hours; changing the password logs everyone out. Run
+`supabase/schema.sql` again once to add the `drivers.active` column.
+
 ## When a driver can't work
 
 On their link (`/?driver=<id>`), a driver clicks **I can't work this day**.
@@ -117,7 +129,7 @@ Change the traffic time with `TRAFFIC_DEPARTURE` in `wrangler.jsonc`.
 ## Secrets
 
 Set on the Worker (Cloudflare dashboard, type Secret, or `npx wrangler secret put NAME`):
-`NVIDIA_API_KEY`, `SUPABASE_SECRET_KEY`, `GOOGLE_MAPS_API_KEY`. Never commit them.
+`NVIDIA_API_KEY`, `SUPABASE_SECRET_KEY`, `GOOGLE_MAPS_API_KEY`, `STAFF_PASSWORD`. Never commit them.
 
 ## Before using real student data
 

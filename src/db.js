@@ -155,7 +155,9 @@ export async function loadData(env, today) {
   const to = shiftDate(today, 60);
   const [schools, drivers, students, travel, exceptions] = await Promise.all([
     select(env, "schools", "select=*&order=name"),
-    select(env, "drivers", "select=*&order=name"),
+    // Filtered here rather than in the query so older databases without the
+    // drivers.active column keep working.
+    select(env, "drivers", "select=*&order=name").then((rows) => rows.filter((d) => d.active !== false)),
     select(env, "students", "select=*&active=eq.true&order=name"),
     select(env, "travel_times", "select=from_id,to_id,minutes"),
     select(env, "exceptions", `select=*&confirmed=eq.true&date=gte.${from}&date=lte.${to}`),
@@ -184,5 +186,23 @@ export async function saveTravelTimes(env, rows, source = "google") {
     query: "on_conflict=from_id,to_id",
     body: rows.map((r) => ({ ...r, source, updated_at: now })),
     prefer: "resolution=merge-duplicates,return=minimal",
+  });
+}
+
+// ---------- Manage page (drivers and students) ----------
+
+export const listTable = (env, table, query) => select(env, table, query);
+
+export async function insertRow(env, table, row) {
+  await rest(env, table, { method: "POST", body: row, prefer: "return=minimal" });
+}
+
+/** Update one row by id; returns the updated rows (empty if not found). */
+export async function updateRow(env, table, id, patch) {
+  return rest(env, table, {
+    method: "PATCH",
+    query: `id=eq.${encodeURIComponent(id)}`,
+    body: patch,
+    prefer: "return=representation",
   });
 }

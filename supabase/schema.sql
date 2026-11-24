@@ -41,6 +41,7 @@ create table if not exists travel_times (
   primary key (from_id, to_id)
 );
 -- Added later; "if not exists" so running this file again upgrades older setups.
+alter table drivers add column if not exists active boolean not null default true;
 alter table travel_times add column if not exists source     text not null default 'manual'; -- manual | google
 alter table travel_times add column if not exists updated_at timestamptz not null default now();
 

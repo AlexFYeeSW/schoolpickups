@@ -66,6 +66,7 @@
     <div>
       <h1>Pickup Schedule</h1>
       <p class="sub" id="summary">Loading…</p>
+      <p class="sub" id="manageLink" hidden><a href="/manage.html" style="color:var(--accent)">Manage drivers &amp; students</a></p>
     </div>
     <label>Date <input type="date" id="date"></label>
   </header>
@@ -116,6 +117,7 @@
   const params = new URLSearchParams(location.search);
   const onlyDriver = params.get("driver");
   const staffView = !onlyDriver;
+  if (staffView) document.getElementById("manageLink").hidden = false;
   if (params.get("date")) dateInput.value = params.get("date");
 
   const STORE = "pickup-changes";

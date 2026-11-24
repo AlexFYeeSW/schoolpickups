@@ -2,6 +2,8 @@ import { buildDailySchedule } from "./scheduler.js";
 import { loadData as loadFromDb, dbStatus, DbError, markDriverOff, clearDriverOff } from "./db.js";
 import { rescheduleWithoutDriver } from "./reschedule.js";
 import { travelStatus, refreshTravelTimes, MapsError } from "./maps.js";
+import { staffLoginEnabled, checkPassword, sessionCookie, clearCookie, isStaff } from "./auth.js";
+import { InputError, listDrivers, createDriver, updateDriver, listStudents, createStudent, updateStudent } from "./admin.js";
 
 // Cron expression for the weekly driving-time refresh (must match wrangler.jsonc).
 const WEEKLY_TRAVEL_CRON = "0 10 * * 1";
@@ -39,10 +41,10 @@ function localNow(timeZone, now = new Date()) {
   return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
 }
 
-function json(body, status = 200) {
+function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body, null, 2), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
   });
 }
 
@@ -70,6 +72,7 @@ export default {
       return await handle(request, env);
     } catch (err) {
       if (err instanceof DbError) return json({ error: err.message, database: dbStatus(env) }, 503);
+      if (err instanceof InputError) return json({ error: err.message }, 400, { "Cache-Control": "no-store" });
       if (err instanceof MapsError) return json({ error: err.message }, err.status >= 400 && err.status < 600 ? err.status : 502);
       console.error("Unhandled error:", err?.stack || err);
       return json({ error: `Server error: ${err?.message || err}` }, 500);
@@ -94,6 +97,10 @@ export default {
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  if (path === "/api/session" || path === "/api/login" || path === "/api/logout" || path.startsWith("/api/admin/")) {
+    return handleStaff(request, env, path);
+  }
 
   if (path === "/api/health") {
     return json({ ok: true, llm: llmEnabled(env), database: dbStatus(env) });
@@ -237,6 +244,48 @@ async function handle(request, env) {
 
   if (path.startsWith("/api/")) return json({ error: "Not found" }, 404);
   return env.ASSETS.fetch(request);
+}
+
+// ---------- staff login + Manage page (drivers, students) ----------
+async function handleStaff(request, env, path) {
+  const noStore = { "Cache-Control": "no-store" };
+
+  if (path === "/api/session") {
+    return json({ enabled: staffLoginEnabled(env), loggedIn: await isStaff(request, env), database: dbStatus(env) }, 200, noStore);
+  }
+  if (path === "/api/login" && request.method === "POST") {
+    if (!staffLoginEnabled(env)) {
+      return json({ error: "Staff login isn't set up. Add a STAFF_PASSWORD secret in Cloudflare." }, 503, noStore);
+    }
+    if (!(await allowLlmCall(request, env))) return json({ error: "Too many attempts. Wait a minute." }, 429, noStore);
+    const body = await readBody(request);
+    if (!(await checkPassword(env, body?.password))) return json({ error: "Wrong password." }, 401, noStore);
+    return json({ ok: true }, 200, { ...noStore, "Set-Cookie": await sessionCookie(env) });
+  }
+  if (path === "/api/logout" && request.method === "POST") {
+    return json({ ok: true }, 200, { ...noStore, "Set-Cookie": clearCookie() });
+  }
+
+  // Everything under /api/admin/ needs a staff login.
+  if (!(await isStaff(request, env))) return json({ error: "Please log in as staff." }, 401, noStore);
+
+  const m = /^\/api\/admin\/(drivers|students)(?:\/([A-Za-z0-9_-]{1,64}))?$/.exec(path);
+  if (!m) return json({ error: "Not found" }, 404, noStore);
+  const [, kind, id] = m;
+  const method = request.method;
+  const body = method === "GET" ? null : await readBody(request);
+  if (method !== "GET" && !body) return json({ error: "Invalid JSON body" }, 400, noStore);
+
+  if (kind === "drivers") {
+    if (method === "GET" && !id) return json({ drivers: await listDrivers(env) }, 200, noStore);
+    if (method === "POST" && !id) return json({ driver: await createDriver(env, body) }, 201, noStore);
+    if (method === "PATCH" && id) return json({ driver: await updateDriver(env, id, body) }, 200, noStore);
+  } else {
+    if (method === "GET" && !id) return json(await listStudents(env), 200, noStore);
+    if (method === "POST" && !id) return json({ student: await createStudent(env, body) }, 201, noStore);
+    if (method === "PATCH" && id) return json({ student: await updateStudent(env, id, body) }, 200, noStore);
+  }
+  return json({ error: "Not allowed" }, 405, noStore);
 }
 
 async function runNoonJob(controller, env) {

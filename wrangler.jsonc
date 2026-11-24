@@ -41,6 +41,6 @@
   "observability": { "enabled": true }
 
   // Secrets (set in the Cloudflare dashboard as type Secret, never in this file):
-  //   NVIDIA_API_KEY, SUPABASE_SECRET_KEY, GOOGLE_MAPS_API_KEY
+  //   NVIDIA_API_KEY, SUPABASE_SECRET_KEY, GOOGLE_MAPS_API_KEY, STAFF_PASSWORD
   // Variable set in the dashboard: CENTER_ADDRESS (the center's street address).
 }
