@@ -34,7 +34,8 @@ type **Secret**). Check it's picked up at `/api/health` (`"llm": true`).
 - **Daily changes:** staff paste a message ("Leo absent Thursday, Driver B off
   today"). The AI proposes changes; each is checked against the real student,
   driver and school lists, and nothing is applied until staff confirm.
-  **After 1:30 PM** (Los Angeles time; `CHANGES_CUTOFF` in `wrangler.jsonc`),
+  **45 minutes before the day's first dismissal** (counting saved early-release
+  changes; `CHANGES_CUTOFF_MINUTES_BEFORE_DISMISSAL` in `wrangler.jsonc`),
   changes for the same day are refused; changes for later days are still
   accepted. A driver's "I can't work this day" button and Manage → Days off are
   not affected by the cutoff.

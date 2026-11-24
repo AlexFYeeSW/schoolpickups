@@ -173,18 +173,22 @@
   function cutoffPassedSinceLoad() {
     // The page may stay open past the cutoff; recheck against the time it was loaded.
     if (!changesWin || changesWin.closedForToday) return Boolean(changesWin?.closedForToday);
-    const [h, m] = changesWin.cutoff.replace(/ (AM|PM)$/, "").split(":").map(Number);
-    const pm = changesWin.cutoff.endsWith("PM");
-    const cutoffMin = ((h % 12) + (pm ? 12 : 0)) * 60 + m;
+    if (changesWin.cutoffMinutes == null) return false; // no dismissals today
     const now = new Date();
-    return now.getHours() * 60 + now.getMinutes() >= cutoffMin && Date.now() - winLoadedAt < 24 * 3600e3;
+    return now.getHours() * 60 + now.getMinutes() >= changesWin.cutoffMinutes && Date.now() - winLoadedAt < 24 * 3600e3;
   }
   function renderCutoff() {
     if (!staffView || !changesWin) return;
+    if (changesWin.cutoffMinutes == null) {
+      $("cutoffNote").textContent = "No dismissals today, so changes for today can be made at any time.";
+      $("cutoffNote").style.color = "";
+      return;
+    }
     const closed = changesWin.closedForToday || cutoffPassedSinceLoad();
+    const why = `${changesWin.minutesBefore} minutes before the first dismissal at ${esc(changesWin.firstDismissal)}`;
     $("cutoffNote").innerHTML = closed
-      ? `<strong>Changes for today closed at ${esc(changesWin.cutoff)}.</strong> You can still enter changes for later days. For today, contact the driver directly.`
-      : `Changes for today are accepted until ${esc(changesWin.cutoff)}.`;
+      ? `<strong>Changes for today closed at ${esc(changesWin.cutoff)}</strong> (${why}). You can still enter changes for later days. For today, contact the driver directly.`
+      : `Changes for today are accepted until ${esc(changesWin.cutoff)} (${why}).`;
     $("cutoffNote").style.color = closed ? "var(--warn)" : "";
   }
 

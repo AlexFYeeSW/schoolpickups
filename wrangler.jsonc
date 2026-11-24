@@ -29,9 +29,9 @@
     "SEND_HOUR": "12",
     // Driving times are looked up for traffic at this local time on a weekday.
     "TRAFFIC_DEPARTURE": "15:00",
-    // After this local time, the Daily changes box stops accepting changes for
-    // the same day (later days are still accepted).
-    "CHANGES_CUTOFF": "13:30",
+    // The Daily changes box stops accepting same-day changes this many minutes
+    // before the day's earliest dismissal (later days are still accepted).
+    "CHANGES_CUTOFF_MINUTES_BEFORE_DISMISSAL": "45",
     // Most "Refresh driving times" presses that may succeed per day (Google costs).
     "TRAVEL_REFRESHES_PER_DAY": "10",
     // How many plans the scheduler tries to keep waits under 30 minutes. 150 fits

@@ -153,7 +153,7 @@ async function handle(request, env) {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
-    return json({ ...schedule, dataSource: data.source, database: data.dbStatus, changesWindow: changesWindow(env) }, 200, noStore);
+    return json({ ...schedule, dataSource: data.source, database: data.dbStatus, changesWindow: changesWindow(env, data) }, 200, noStore);
   }
 
   // POST {text} → AI reads a message and proposes changes for staff to confirm.
@@ -167,8 +167,9 @@ async function handle(request, env) {
 
     try {
       // "Today" comes from the server's clock, not the browser, so the cutoff can't be dodged.
-      const win = changesWindow(env);
-      const result = await parseChanges(text, await loadData(env), win.today, env);
+      const data = await loadData(env);
+      const win = changesWindow(env, data);
+      const result = await parseChanges(text, data, win.today, env);
       return json({ ...applyCutoff(result, win), window: win });
     } catch (err) {
       console.error("Parse failed:", err.message);

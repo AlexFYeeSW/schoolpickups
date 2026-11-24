@@ -22,12 +22,6 @@ export function localNow(timeZone, now = new Date()) {
   };
 }
 
-/** "13:30" -> 810 (minutes after midnight), or null if it isn't a valid time. */
-export function parseClock(hhmm) {
-  const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm ?? "").trim());
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-}
-
 /** 810 -> "1:30 PM" */
 export function clockLabel(minutes) {
   const h = Math.floor(minutes / 60);

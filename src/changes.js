@@ -3,8 +3,8 @@
 // real data, and staff confirm before anything is applied.
 
 import { chat, llmEnabled } from "./llm.js";
-import { weekdayOf } from "./scheduler.js";
-import { localNow, parseClock, clockLabel } from "./time.js";
+import { weekdayOf, buildRoster } from "./scheduler.js";
+import { localNow, clockLabel } from "./time.js";
 
 export const MAX_TEXT_LENGTH = 2000;
 const TYPES = ["student_absent", "driver_off", "dismissal_change", "extra_pickup"];
@@ -120,20 +120,41 @@ ${roster}`;
 
 // ---------- same-day cutoff ----------
 
-export const DEFAULT_CHANGES_CUTOFF = "13:30";
+export const DEFAULT_MINUTES_BEFORE_DISMISSAL = 45;
+
+/** Minutes before the first dismissal that same-day changes stop (CHANGES_CUTOFF_MINUTES_BEFORE_DISMISSAL). */
+function leadMinutes(env) {
+  const n = Number(env.CHANGES_CUTOFF_MINUTES_BEFORE_DISMISSAL);
+  return Number.isInteger(n) && n >= 0 && n <= 600 ? n : DEFAULT_MINUTES_BEFORE_DISMISSAL;
+}
 
 /**
- * Whether the Daily changes box still accepts changes for today. After the
- * cutoff (CHANGES_CUTOFF, default 1:30 PM local time) changes for today are
- * refused; changes for later days are always accepted.
+ * Whether the Daily changes box still accepts changes for today. Same-day
+ * changes close a set number of minutes (default 45) before the earliest
+ * dismissal today — counting saved early-release changes — among schools with
+ * students being picked up (or any school with a time, if none). Changes for
+ * later days are always accepted. Days without dismissal times never close.
  */
-export function changesWindow(env, now = new Date()) {
-  const cutoff = parseClock(env.CHANGES_CUTOFF) ?? parseClock(DEFAULT_CHANGES_CUTOFF);
+export function changesWindow(env, data, now = new Date()) {
   const t = localNow(env.TIMEZONE, now);
+  const lead = leadMinutes(env);
+  const roster = buildRoster(data, t.date);
+  const withStudents = new Set(roster.students.map((s) => s.schoolId));
+  const times = (list) => list.map((s) => s.dismissalToday).filter((m) => Number.isFinite(m));
+  const pool = times(roster.schools.filter((s) => withStudents.has(s.id)));
+  const firstDismissal = Math.min(...(pool.length ? pool : times(roster.schools)));
+
+  if (!Number.isFinite(firstDismissal)) {
+    return { today: t.date, cutoff: null, cutoffMinutes: null, firstDismissal: null, minutesBefore: lead, closedForToday: false };
+  }
+  const cutoffMinutes = Math.max(0, firstDismissal - lead);
   return {
     today: t.date,
-    cutoff: clockLabel(cutoff),
-    closedForToday: t.hour * 60 + t.minute >= cutoff,
+    cutoff: clockLabel(cutoffMinutes),
+    cutoffMinutes,
+    firstDismissal: clockLabel(firstDismissal),
+    minutesBefore: lead,
+    closedForToday: t.hour * 60 + t.minute >= cutoffMinutes,
   };
 }
 
