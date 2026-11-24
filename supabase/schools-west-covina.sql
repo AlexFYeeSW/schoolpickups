@@ -5,11 +5,10 @@
 -- Names and addresses come from the California Department of Education school
 -- directory and public school listings (checked November 2026).
 --
--- DISMISSAL TIMES ARE LEFT BLANK ON PURPOSE. They couldn't be confirmed from
--- the schools' official bell schedules. Students at a school with no dismissal
--- time are listed under "Needs attention" instead of being scheduled. Fill them
--- in from each school's current bell schedule (Supabase -> Table Editor ->
--- schools), including any weekly early-release day.
+-- Dismissal times aren't set here. Run dismissal-times-west-covina.sql next
+-- (2:20 PM Mon/Tue/Wed/Fri, 1:15 PM Thu), or enter them per school in
+-- Supabase -> Table Editor -> schools. Students at a school with no dismissal
+-- time are listed under "Needs attention" instead of being scheduled.
 --
 -- Re-running this file updates names and addresses but never overwrites
 -- dismissal times you've entered.
