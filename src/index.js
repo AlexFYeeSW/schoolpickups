@@ -14,7 +14,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Supabase when SUPABASE_URL + SUPABASE_SECRET_KEY are set; sample data otherwise.
 async function loadData(env) {
-  return loadFromDb(env, localNow(env.TIMEZONE).date);
+  const data = await loadFromDb(env, localNow(env.TIMEZONE).date);
+  return { ...data, plannerMaxTries: Number(env.PLANNER_MAX_TRIES) || undefined };
 }
 
 /** Master data plus the day's changes sent from the page (checked first). */

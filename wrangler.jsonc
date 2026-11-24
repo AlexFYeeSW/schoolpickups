@@ -30,6 +30,9 @@
     "TRAFFIC_DEPARTURE": "15:00",
     // Most "Refresh driving times" presses that may succeed per day (Google costs).
     "TRAVEL_REFRESHES_PER_DAY": "10",
+    // How many plans the scheduler tries to keep waits under 30 minutes. 150 fits
+    // the free plan's CPU limit; on the paid plan, 400 finds better plans on hard days.
+    "PLANNER_MAX_TRIES": "150",
     "NVIDIA_MODEL": "meta/llama-3.3-70b-instruct",
     // Not secret: the project's public address. The key is the SUPABASE_SECRET_KEY secret.
     "SUPABASE_URL": "https://qdghsjanijuzneukvhwt.supabase.co",

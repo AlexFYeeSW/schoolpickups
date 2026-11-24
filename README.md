@@ -16,7 +16,13 @@ LLM API plug in later.
 | 5 | Write each route as a readable message (Nvidia LLM if a key is set) | `src/llm.js` |
 | 6–7 | 12 PM weekday job builds the schedule; drivers open their link | `scheduled` in `src/index.js`, `public/index.html` |
 
-All drivers start and end at the center. The LLM only rewrites the text; it
+All drivers start and end at the center. The scheduler tries many plans and
+keeps the one where children wait least after dismissal (target: under 30
+minutes), then the one with the least driving. Each school's children usually
+ride together, and drivers return to the center between trips when needed. The
+staff page shows the longest wait, and any pickup over 30 minutes is flagged
+under "Needs attention". `PLANNER_MAX_TRIES` (default 150, sized for
+Cloudflare's free plan) sets how hard it searches. The LLM only rewrites the text; it
 never decides assignments, and its output is discarded if a student name goes
 missing.
 

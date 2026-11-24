@@ -71,8 +71,10 @@ explained, and recorded correctly.
 
 ## Changing the behaviour (for code changes)
 
-- Assignment rules: `assignRoutes` in `src/scheduler.js` (`MAX_WAIT_MINUTES`
-  controls how long students may wait after dismissal before a warning).
+- Assignment rules: `assignRoutes` in `src/scheduler.js`. It tries many plans
+  and keeps the one with the fewest children waiting over
+  `TARGET_WAIT_MINUTES` (30) after dismissal, then the shortest longest wait,
+  then the least driving. Waits over the target appear as warnings.
 - Endpoints: `/api/driver-unavailable`, `/api/driver-available` and the staff
   `/api/admin/days-off` routes in `src/index.js` (shared logic in
   `markUnavailable` / `markAvailable`). Pages: `renderDriverPanel` in

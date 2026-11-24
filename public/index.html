@@ -53,6 +53,7 @@
     li.stop { border-top: 1px solid var(--line); padding: 10px 0; }
     .time { font-weight: 600; font-variant-numeric: tabular-nums; }
     .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+    .tag.late { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
     .kids { color: var(--muted); font-size: 14px; margin-top: 2px; }
     .msg { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
     .msg pre { white-space: pre-wrap; font: inherit; font-size: 14px; background: var(--soft); border-radius: 8px; padding: 10px; margin: 6px 0 0; }
@@ -163,7 +164,8 @@
 
     const c = data.counts;
     $("summary").textContent =
-      `${data.weekday.toUpperCase()} ${data.date} · ${c.students} students · ${c.schools} schools · ${c.drivers} drivers`;
+      `${data.weekday.toUpperCase()} ${data.date} · ${c.students} students · ${c.schools} schools · ${c.drivers} drivers` +
+      (staffView && data.waits && c.students ? ` · longest wait ${data.waits.longest} min (target ${data.waits.target})` : "");
 
     let note = "";
     if (data.dataSource === "sample") {
@@ -197,6 +199,7 @@
             <span class="time">${esc(s.time)}</span>
             ${s.type === "pickup" ? "Pick up" : "Drop off"} · ${esc(s.place)}
             ${s.dismissal ? `<span class="tag">dismissal ${esc(s.dismissal)}</span>` : ""}
+            ${s.waitMinutes > 0 ? `<span class="tag ${s.waitMinutes > (data.waits?.target ?? 30) ? "late" : ""}">wait ${s.waitMinutes} min</span>` : ""}
             <div class="kids">${s.type === "pickup"
               ? s.students.map((k) => esc(k.name) + (k.notes ? ` <em>(${esc(k.notes)})</em>` : "")).join(", ")
               : `${s.students.length} students`}</div>
