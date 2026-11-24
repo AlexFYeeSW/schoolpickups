@@ -5,10 +5,21 @@
 // Needs: GOOGLE_MAPS_API_KEY (secret), CENTER_ADDRESS (variable), the
 // database connected, and an address on each school.
 
-import { listSchoolAddresses, listTravelTimes, saveTravelTimes, dbStatus } from "./db.js";
+import { listSchoolAddresses, listTravelTimes, saveTravelTimes, dbStatus, countRefreshesSince, logRefresh, DbError } from "./db.js";
 
 const MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
-const MIN_HOURS_BETWEEN_REFRESHES = 24; // keeps Google costs down
+const DEFAULT_REFRESHES_PER_DAY = 10; // keeps Google costs down; TRAVEL_REFRESHES_PER_DAY overrides
+
+export function refreshesPerDay(env) {
+  const n = Number(env.TRAVEL_REFRESHES_PER_DAY);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_REFRESHES_PER_DAY;
+}
+
+/** Midnight today in the business's time zone, as a UTC Date. */
+function startOfLocalDay(timeZone, now) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone }).format(now);
+  return zonedTime(today, "00:00", timeZone);
+}
 const DEFAULT_DEPARTURE = "15:00"; // weekday afternoon pickup traffic
 
 export class MapsError extends Error {
@@ -176,7 +187,15 @@ export async function travelStatus(env, now = new Date()) {
   const [schools, times] = await Promise.all([listSchoolAddresses(env), listTravelTimes(env)]);
   const google = times.filter((t) => t.source === "google");
   const lastGoogle = google.map((t) => t.updated_at).sort().pop() || null;
-  const nextAllowed = lastGoogle ? new Date(Date.parse(lastGoogle) + MIN_HOURS_BETWEEN_REFRESHES * 3_600_000) : null;
+  const perDay = refreshesPerDay(env);
+  let refreshesToday = null;
+  let logMissing = false;
+  try {
+    refreshesToday = await countRefreshesSince(env, startOfLocalDay(env.TIMEZONE, now).toISOString());
+  } catch (err) {
+    if (!(err instanceof DbError)) throw err;
+    logMissing = true; // older database without the travel_refreshes table
+  }
   const missingAddresses = schools.filter((s) => !String(s.address || "").trim()).map((s) => s.name);
 
   // Setup problems block every refresh; "too recent" only blocks the manual button.
@@ -184,15 +203,17 @@ export async function travelStatus(env, now = new Date()) {
   if (!base.googleKey) setupProblem = "Add the GOOGLE_MAPS_API_KEY secret in Cloudflare.";
   else if (!base.centerAddress) setupProblem = "Add the CENTER_ADDRESS variable in Cloudflare (the afterschool center's street address).";
   else if (missingAddresses.length === schools.length) setupProblem = "Add an address to each school in the Supabase schools table.";
-  const tooRecent = Boolean(nextAllowed && nextAllowed > now);
-  const reason = setupProblem || (tooRecent ? `Driving times were refreshed in the last ${MIN_HOURS_BETWEEN_REFRESHES} hours; try again after ${nextAllowed.toISOString()}.` : null);
+  else if (logMissing) setupProblem = "Run supabase/schema.sql again in the Supabase SQL Editor (it adds the travel_refreshes table used for the daily limit; safe to re-run).";
+  const limitReached = refreshesToday != null && refreshesToday >= perDay;
+  const reason = setupProblem || (limitReached ? `Driving times were already refreshed ${refreshesToday} times today (the limit is ${perDay}). Try again tomorrow.` : null);
 
   return {
     ...base,
     pairs: times.length,
     fromGoogle: google.length,
     lastUpdatedFromGoogle: lastGoogle,
-    nextRefreshAllowed: nextAllowed && nextAllowed > now ? nextAllowed.toISOString() : null,
+    refreshesToday,
+    refreshesPerDay: perDay,
     missingAddresses,
     canRefresh: !reason,
     setupProblem,
@@ -202,7 +223,9 @@ export async function travelStatus(env, now = new Date()) {
 
 /**
  * Look up driving times for the center and every school with an address, and
- * save them. Limited to once per 24 hours unless `force` (used by the weekly job).
+ * save them. Limited to TRAVEL_REFRESHES_PER_DAY successful refreshes per local
+ * day (default 10) unless `force` (used by the weekly job). Failed attempts
+ * don't count: Google doesn't charge for refused requests.
  */
 export async function refreshTravelTimes(env, { force = false, now = new Date() } = {}) {
   const status = await travelStatus(env, now);
@@ -220,6 +243,7 @@ export async function refreshTravelTimes(env, { force = false, now = new Date() 
   if (!rows.length) throw new MapsError(`Google returned no usable routes. ${problems.join("; ")}`, 502);
 
   await saveTravelTimes(env, rows, "google");
+  await logRefresh(env, rows.length, force ? "weekly" : "manual");
   const summary = `Updated ${rows.length} driving times from Google for traffic on ${departure.date} at ${env.TRAFFIC_DEPARTURE || DEFAULT_DEPARTURE}.`;
   console.log(summary, problems.length ? `Problems: ${problems.join("; ")}` : "");
   return {

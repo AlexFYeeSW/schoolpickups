@@ -78,7 +78,7 @@ test("a refused Google key gives a clear message", async () => {
 });
 
 // ---- full refresh with a fake Supabase + Google ----
-function fakeServices({ schools, times = [] }) {
+function fakeServices({ schools, times = [], refreshes = [], noRefreshTable = false }) {
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
@@ -91,6 +91,15 @@ function fakeServices({ schools, times = [] }) {
     }
     if (u.pathname.endsWith("/schools")) return json(schools);
     if (u.pathname.endsWith("/travel_times") && (init.method || "GET") === "GET") return json(times);
+    if (u.pathname.endsWith("/travel_refreshes")) {
+      if (noRefreshTable) return json({ message: 'relation "public.travel_refreshes" does not exist' }, 404);
+      if ((init.method || "GET") === "GET") {
+        const since = u.searchParams.get("refreshed_at").replace(/^gte\./, "");
+        return json(refreshes.filter((r) => r.refreshed_at >= since).map((r) => ({ id: r.id })));
+      }
+      refreshes.push({ id: refreshes.length + 1, refreshed_at: new Date().toISOString(), ...JSON.parse(init.body) });
+      return new Response("", { status: 201 });
+    }
     return new Response("", { status: 201 });
   };
   return calls;
@@ -128,15 +137,62 @@ test("setup problems are explained", async () => {
   await assert.rejects(refreshTravelTimes(env, { now: NOW }), /Add an address to each school/);
 });
 
-test("manual refresh is limited to once a day; the weekly job isn't", async () => {
-  const recent = [{ from_id: "base", to_id: "maple", minutes: 9, source: "google", updated_at: "2026-11-20T10:00:00Z" }];
-  fakeServices({ schools: [{ id: "maple", name: "Maple", address: "2 Oak Ave" }], times: recent });
-  const st = await travelStatus(env, NOW);
+test("up to 10 refreshes per day (Los Angeles day); the weekly job isn't limited", async () => {
+  // NOW = Fri 2026-11-20 10:00 AM in Los Angeles; local midnight = 08:00 UTC.
+  const at = (iso) => ({ refreshed_at: iso });
+  const yesterday = Array.from({ length: 10 }, () => at("2026-11-20T07:59:00.000Z")); // 11:59 PM Thursday LA
+  const today9 = Array.from({ length: 9 }, () => at("2026-11-20T08:30:00.000Z"));
+  const schools = [{ id: "maple", name: "Maple", address: "2 Oak Ave" }];
+
+  const refreshes = [...yesterday, ...today9].map((r, i) => ({ id: i + 1, ...r }));
+  const calls = fakeServices({ schools, refreshes });
+  let st = await travelStatus(env, NOW);
+  assert.equal(st.refreshesToday, 9, "yesterday's refreshes don't count");
+  assert.equal(st.refreshesPerDay, 10);
+  assert.equal(st.canRefresh, true);
+  assert.match(calls.find((c) => c.path.includes("travel_refreshes")).path, /refreshed_at=gte\.2026-11-20T08%3A00%3A00\.000Z/);
+
+  // 10th refresh is allowed and logged...
+  await refreshTravelTimes(env, { now: NOW });
+  const log = calls.find((c) => c.method === "POST" && c.path === "/rest/v1/travel_refreshes");
+  assert.deepEqual(log.body, { routes: 2, trigger: "manual" });
+
+  // ...the 11th isn't.
+  refreshes[refreshes.length - 1].refreshed_at = "2026-11-20T09:00:00.000Z";
+  st = await travelStatus(env, NOW);
+  assert.equal(st.refreshesToday, 10);
   assert.equal(st.canRefresh, false);
-  assert.match(st.reason, /last 24 hours/);
-  await assert.rejects(refreshTravelTimes(env, { now: NOW }), /last 24 hours/);
+  assert.match(st.reason, /already refreshed 10 times today \(the limit is 10\)/);
+  await assert.rejects(refreshTravelTimes(env, { now: NOW }), /limit is 10/);
+
+  // The weekly job still runs, and is logged as weekly.
   const r = await refreshTravelTimes(env, { now: NOW, force: true });
   assert.equal(r.updated, 2);
+  assert.equal(refreshes.at(-1).trigger, "weekly");
+
+  // The limit can be changed with TRAVEL_REFRESHES_PER_DAY.
+  st = await travelStatus({ ...env, TRAVEL_REFRESHES_PER_DAY: "20" }, NOW);
+  assert.equal(st.canRefresh, true);
+});
+
+test("failed refreshes don't use up the daily limit", async () => {
+  const refreshes = [];
+  fakeServices({ schools: [{ id: "maple", name: "Maple", address: "2 Oak Ave" }], refreshes });
+  const ok = globalThis.fetch;
+  globalThis.fetch = async (url, init) =>
+    String(url).includes("routes.googleapis.com")
+      ? json([{ error: { code: 403, message: "Permission denied on the service." } }], 403)
+      : ok(url, init);
+  for (let i = 0; i < 12; i++) await assert.rejects(refreshTravelTimes(env, { now: NOW }), /403/);
+  assert.equal(refreshes.length, 0);
+  assert.equal((await travelStatus(env, NOW)).canRefresh, true);
+});
+
+test("older database without the refresh log says to re-run schema.sql", async () => {
+  fakeServices({ schools: [{ id: "maple", name: "Maple", address: "2 Oak Ave" }], noRefreshTable: true });
+  const st = await travelStatus(env, NOW);
+  assert.equal(st.canRefresh, false);
+  assert.match(st.setupProblem, /Run supabase\/schema\.sql again/);
 });
 
 test("Google's real invalid-key reply (error wrapped in a list) is explained", async () => {

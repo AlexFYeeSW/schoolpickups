@@ -206,3 +206,13 @@ export async function updateRow(env, table, id, patch) {
     prefer: "return=representation",
   });
 }
+
+/** How many successful driving-time refreshes happened since `sinceIso`. */
+export async function countRefreshesSince(env, sinceIso) {
+  const rows = await select(env, "travel_refreshes", `select=id&refreshed_at=gte.${encodeURIComponent(sinceIso)}`);
+  return rows.length;
+}
+
+export async function logRefresh(env, routes, trigger) {
+  await rest(env, "travel_refreshes", { method: "POST", body: { routes, trigger }, prefer: "return=minimal" });
+}

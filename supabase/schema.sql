@@ -45,6 +45,14 @@ alter table drivers add column if not exists active boolean not null default tru
 alter table travel_times add column if not exists source     text not null default 'manual'; -- manual | google
 alter table travel_times add column if not exists updated_at timestamptz not null default now();
 
+-- One row per successful driving-time refresh from Google (for the daily limit).
+create table if not exists travel_refreshes (
+  id            bigint generated always as identity primary key,
+  refreshed_at  timestamptz not null default now(),
+  routes        int not null,
+  trigger       text not null  -- manual | weekly
+);
+
 -- Daily changes (absences, driver off, early release, extra pickup).
 create table if not exists exceptions (
   id          bigint generated always as identity primary key,
@@ -83,6 +91,7 @@ alter table schools      enable row level security;
 alter table drivers      enable row level security;
 alter table students     enable row level security;
 alter table travel_times enable row level security;
+alter table travel_refreshes enable row level security;
 alter table exceptions   enable row level security;
 alter table schedules    enable row level security;
 alter table deliveries   enable row level security;

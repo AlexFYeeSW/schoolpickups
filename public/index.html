@@ -228,7 +228,7 @@
     }
     const when = t.lastUpdatedFromGoogle ? new Date(t.lastUpdatedFromGoogle).toLocaleString() : null;
     $("travelInfo").textContent = when
-      ? `${t.fromGoogle} of ${t.pairs} driving times come from Google with weekday-afternoon traffic, last updated ${when}. They refresh automatically every Monday.`
+      ? `${t.fromGoogle} of ${t.pairs} driving times come from Google with weekday-afternoon traffic, last updated ${when}. They refresh automatically every Monday${t.refreshesToday != null ? `; refreshed ${t.refreshesToday} of ${t.refreshesPerDay} times today` : ""}.`
       : `${t.pairs} driving times, all entered by hand. Google traffic times aren't set up yet.`;
     $("travelBtn").hidden = Boolean(t.setupProblem);
     $("travelBtn").disabled = !t.canRefresh;

@@ -113,7 +113,9 @@ The scheduler uses the `travel_times` table. With Google set up, the Worker
 asks the Routes API for driving times **at 3 PM on the next weekday** (traffic
 predictions) between the center and every school, in both directions, and
 saves them there. It runs every Monday at about 2–3 AM Los Angeles time, and
-staff can press **Refresh driving times** (at most once per 24 hours). Only
+staff can press **Refresh driving times** (up to 10 successful refreshes per
+day, Los Angeles time; failed attempts don't count; change with
+`TRAVEL_REFRESHES_PER_DAY` in `wrangler.jsonc`). Only
 addresses are sent to Google, never student information.
 
 Setup:
