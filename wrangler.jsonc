@@ -8,7 +8,8 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    // "/" too, so old driver links (/?driver=…) can be forwarded to /schedule.
+    "run_worker_first": ["/", "/api/*"]
   },
 
   // Cloudflare cron runs on UTC. 12:00 PM in Los Angeles is 19:00 UTC in summer

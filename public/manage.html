@@ -76,21 +76,13 @@
   <header>
     <div>
       <h1>Manage</h1>
-      <p class="sub"><a href="/">← Back to schedule</a></p>
+      <p class="sub"><a href="/schedule">← Back to schedule</a></p>
     </div>
     <button id="logoutBtn" hidden>Log out</button>
   </header>
 
   <div id="notice"></div>
 
-  <section class="panel" id="loginPanel" hidden>
-    <h2>Staff login</h2>
-    <form id="loginForm" class="row">
-      <input type="password" id="password" autocomplete="current-password" placeholder="Staff password" style="max-width:260px" required>
-      <button class="primary" type="submit">Log in</button>
-      <span class="status" id="loginStatus"></span>
-    </form>
-  </section>
 
   <div id="app" hidden>
     <div class="tabs" role="tablist">
@@ -199,7 +191,7 @@
   const setDays = (form, list) => form.querySelectorAll("[data-days] input").forEach((i) => { i.checked = list.includes(i.value); });
 
   // ---------- login ----------
-  function showLogin() { $("loginPanel").hidden = false; $("app").hidden = true; $("logoutBtn").hidden = true; }
+  function showLogin() { location.href = `/?next=${encodeURIComponent("/manage" + location.hash)}`; }
   async function start() {
     let s;
     try { s = await api("GET", "/api/session"); } catch (e) { $("notice").innerHTML = `<div class="warn">${esc(e.message)}</div>`; return; }
@@ -211,21 +203,11 @@
       $("notice").innerHTML = `<div class="warn">The database isn't connected, so drivers and students can't be saved. Add the SUPABASE_SECRET_KEY secret in Cloudflare.</div>`;
     }
     if (!s.loggedIn) return showLogin();
-    $("loginPanel").hidden = true; $("app").hidden = false; $("logoutBtn").hidden = false;
+    $("app").hidden = false; $("logoutBtn").hidden = false;
     showTab(location.hash === "#students" ? "students" : "drivers");
     await Promise.all([loadDrivers(), loadStudents(), loadDaysOff()]);
   }
-  $("loginForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    setStatus($("loginStatus"), "Checking…");
-    try {
-      await api("POST", "/api/login", { password: $("password").value });
-      $("password").value = "";
-      setStatus($("loginStatus"), "");
-      start();
-    } catch (err) { setStatus($("loginStatus"), err.message, "err"); }
-  });
-  $("logoutBtn").addEventListener("click", async () => { await api("POST", "/api/logout").catch(() => {}); showLogin(); });
+  $("logoutBtn").addEventListener("click", async () => { await api("POST", "/api/logout").catch(() => {}); location.href = "/"; });
 
   // ---------- tabs ----------
   function showTab(name) {
@@ -327,7 +309,7 @@
         <div class="main">
           <div class="name">${esc(d.name)} ${d.active ? "" : `<span class="tag">inactive</span>`}</div>
           <div class="meta">${d.seats} seats · ${esc(dayLabel(d.days))}${d.phone ? ` · ${esc(d.phone)}` : ""}${d.email ? ` · ${esc(d.email)}` : ""}</div>
-          <div class="meta">Driver link: <a href="/?driver=${encodeURIComponent(d.id)}">/?driver=${esc(d.id)}</a></div>
+          <div class="meta">Driver link: <a href="/schedule?driver=${encodeURIComponent(d.id)}">/schedule?driver=${esc(d.id)}</a></div>
         </div>
         <div class="actions">
           <button data-edit="${esc(d.id)}">Edit</button>

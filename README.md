@@ -44,8 +44,10 @@ type **Secret**). Check it's picked up at `/api/health` (`"llm": true`).
 
 ## Links
 
-- Everyone's routes: `https://<your-worker>.workers.dev/`
-- One driver: `https://<your-worker>.workers.dev/?driver=d1`
+- Landing page and staff sign-in: `https://<your-worker>.workers.dev/`
+- Everyone's routes (staff, signed in): `/schedule`
+- One driver (no password, shows only that driver's route): `/schedule?driver=d1`
+  (older links like `/?driver=d1` still work and are forwarded)
 - A specific day: add `&date=2026-11-16`
 - Raw data: `/api/schedule?date=2026-11-16` (add `&format=text` for driver messages)
 
@@ -67,9 +69,20 @@ npm run dev        # http://localhost:8787
 Trigger the 12 PM job by hand: `curl "http://localhost:8787/__scheduled?cron=0+20+*+*+1-5"`.
 It only acts when it is actually 12 PM in `TIMEZONE`.
 
+## Signing in
+
+The home page (`/`) shows a picture of a school van picking up children and a
+staff password prompt. The password is the **`STAFF_PASSWORD`** secret in
+Cloudflare; until it's set, nobody can sign in. Signed-in staff see the full
+schedule, daily changes, AI tools, driving times and the Manage page; logins
+last 12 hours. Driver links need no password but only ever receive that
+driver's own route. The picture is `public/img/school-van.svg`; to use a photo
+instead, add it to `public/img/` and change the `url(...)` in
+`public/index.html`.
+
 ## Managing drivers and students
 
-`/manage.html` (linked from the staff schedule page) has a **Drivers** tab and
+`/manage` (linked from the staff schedule page) has a **Drivers** tab and
 a **Students** tab to add, edit, deactivate and reactivate records. Changes
 save to Supabase and appear on the schedule right away. Deactivating keeps the
 record (and its history) but leaves it out of future schedules.
@@ -81,7 +94,7 @@ Logins last 12 hours; changing the password logs everyone out. Run
 
 ## When a driver can't work
 
-On their link (`/?driver=<id>`), a driver clicks **I can't work this day**.
+On their link (`/schedule?driver=<id>`), a driver clicks **I can't work this day**.
 The page shows the effect first (who takes their students, and whether
 everyone is still covered), then saves a `driver_off` change to Supabase on
 confirm. Everyone's schedule rebuilds with the remaining drivers, including

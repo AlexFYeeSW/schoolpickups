@@ -3,422 +3,163 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pickup Schedule</title>
+  <meta name="robots" content="noindex">
+  <title>Afterschool Pickups</title>
+  <link rel="preload" as="image" href="/img/school-van.svg">
   <style>
     :root {
-      --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6676;
-      --line: #e3e6eb; --accent: #2457c5; --accent-text: #ffffff;
-      --warn-bg: #fff4e0; --warn: #8a5300; --ok-bg: #e7f5ec; --ok: #1d6b3a; --soft: #eef2fb;
+      --card: rgba(255, 255, 255, 0.92); --text: #1d2330; --muted: #5d6676; --line: #d9dee6;
+      --accent: #2457c5; --accent-hover: #1d47a3; --accent-text: #ffffff;
+      --warn-bg: #fff4e0; --warn: #8a5300; --shade: rgba(12, 24, 44, 0.55);
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #12151b; --card: #1b2029; --text: #e7eaf0; --muted: #9aa3b2;
-        --line: #2c3340; --accent: #7aa2ff; --accent-text: #0d1220;
-        --warn-bg: #3a2a10; --warn: #f3c37a; --ok-bg: #12301f; --ok: #8fd9a8; --soft: #222a38;
+        --card: rgba(23, 28, 37, 0.92); --text: #e7eaf0; --muted: #a3acba; --line: #333b49;
+        --accent: #7aa2ff; --accent-hover: #9ab9ff; --accent-text: #0d1220;
+        --warn-bg: #3a2a10; --warn: #f3c37a; --shade: rgba(5, 10, 20, 0.7);
       }
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text);
-      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-    main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
-    header { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
-    h1 { margin: 0; font-size: 22px; }
-    h2 { margin: 0; font-size: 17px; }
-    .sub { color: var(--muted); margin: 4px 0 0; }
-    label { color: var(--muted); font-size: 13px; display: grid; gap: 4px; }
-    input, textarea { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
-      background: var(--card); color: var(--text); }
-    textarea { width: 100%; min-height: 72px; resize: vertical; }
-    button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; cursor: pointer;
-      border: 1px solid var(--line); background: var(--card); color: var(--text); }
-    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    html, body { height: 100%; }
+    body {
+      margin: 0; color: var(--text); background: #c9e6f6;
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .scene {
+      position: fixed; inset: 0;
+      background: url("/img/school-van.svg") 62% 100% / cover no-repeat, #c9e6f6;
+    }
+    .scene::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(90deg, var(--shade) 0%, rgba(0, 0, 0, 0.15) 45%, rgba(0, 0, 0, 0) 70%);
+    }
+    main {
+      position: relative; min-height: 100%;
+      display: flex; align-items: center;
+      padding: 32px 16px;
+      max-width: 1200px; margin: 0 auto;
+    }
+    .card {
+      width: 100%; max-width: 420px;
+      background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+      padding: 28px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--accent); letter-spacing: .2px; }
+    .brand svg { flex: none; }
+    h1 { font-size: 28px; line-height: 1.2; margin: 18px 0 8px; }
+    .lead { margin: 0 0 22px; color: var(--muted); }
+    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .field { display: flex; gap: 8px; }
+    input[type="password"] {
+      flex: 1; min-width: 0; font: inherit; padding: 10px 12px;
+      border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--text);
+    }
+    input[type="password"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+    button {
+      font: inherit; font-weight: 600; padding: 10px 18px; border: 0; border-radius: 10px; cursor: pointer;
+      background: var(--accent); color: var(--accent-text);
+    }
+    button:hover { background: var(--accent-hover); }
     button:disabled { opacity: .6; cursor: default; }
-    button.link { border: 0; background: none; color: var(--accent); padding: 0 4px; }
-    .warn { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-top: 16px; }
-    .warn ul { margin: 4px 0 0; padding-left: 20px; }
-    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 20px; }
-    .row { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
-    .status { color: var(--muted); font-size: 14px; }
-    .status.err { color: var(--warn); }
-    .list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
-    .list li { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px; background: var(--soft); }
-    .list li.applied { background: var(--ok-bg); color: var(--ok); }
-    .list li .grow { flex: 1; }
-    .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
-    .grid { display: grid; gap: 16px; margin-top: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-    .card-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
-    .meta { color: var(--muted); font-size: 13px; }
-    ol { list-style: none; margin: 12px 0 0; padding: 0; }
-    li.stop { border-top: 1px solid var(--line); padding: 10px 0; }
-    .time { font-weight: 600; font-variant-numeric: tabular-nums; }
-    .tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
-    .tag.late { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
-    .kids { color: var(--muted); font-size: 14px; margin-top: 2px; }
-    .msg { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
-    .msg pre { white-space: pre-wrap; font: inherit; font-size: 14px; background: var(--soft); border-radius: 8px; padding: 10px; margin: 6px 0 0; }
-    .empty { color: var(--muted); margin-top: 24px; }
+    .status { min-height: 24px; margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+    .status.err { color: #c0392b; }
+    @media (prefers-color-scheme: dark) { .status.err { color: #ff8a7a; } }
+    .notice { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: 12px; }
+    .foot { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
     [hidden] { display: none !important; }
+
+    @media (max-width: 720px) {
+      .scene { background-position: 70% 100%; }
+      .scene::after { background: linear-gradient(180deg, var(--shade) 0%, rgba(0, 0, 0, 0.1) 60%, rgba(0, 0, 0, 0) 100%); }
+      main { align-items: flex-start; padding-top: 24px; }
+      .card { margin: 0 auto; padding: 22px; }
+      h1 { font-size: 24px; }
+    }
   </style>
 </head>
 <body>
-<main>
-  <header>
-    <div>
-      <h1>Pickup Schedule</h1>
-      <p class="sub" id="summary">Loading…</p>
-      <p class="sub" id="manageLink" hidden><a href="/manage.html" style="color:var(--accent)">Manage drivers &amp; students</a></p>
-    </div>
-    <label>Date <input type="date" id="date"></label>
-  </header>
-
-  <section class="panel" id="changesPanel" hidden>
-    <h2>Daily changes</h2>
-    <p class="note">Paste a message from a parent, school or driver. The AI suggests changes; nothing is applied until you confirm.</p>
-    <textarea id="changeText" maxlength="2000" placeholder="e.g. Leo is absent Thursday. Driver B is off today. Maple has early release at 1:30 tomorrow."></textarea>
-    <div class="row">
-      <button class="primary" id="parseBtn">Read with AI</button>
-      <span class="status" id="parseStatus"></span>
-    </div>
-    <div id="proposed" hidden>
-      <ul class="list" id="proposedList"></ul>
-      <div class="warn" id="unclear" hidden></div>
-      <div class="row">
-        <button class="primary" id="applyBtn">Apply selected</button>
-        <button id="discardBtn">Discard</button>
+  <div class="scene" role="img" aria-label="A school van parked outside a school while children with backpacks walk to it"></div>
+  <main>
+    <section class="card">
+      <div class="brand">
+        <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+          <rect width="34" height="34" rx="9" fill="currentColor"/>
+          <path d="M7 12h15l5 6v5h-2.2a2.8 2.8 0 0 0-5.6 0h-4.4a2.8 2.8 0 0 0-5.6 0H7z" fill="#fff"/>
+          <rect x="9" y="14" width="5" height="3.5" rx="1" fill="currentColor"/>
+          <rect x="16" y="14" width="5" height="3.5" rx="1" fill="currentColor"/>
+          <circle cx="12" cy="23.5" r="2" fill="#fff"/><circle cx="22" cy="23.5" r="2" fill="#fff"/>
+        </svg>
+        Afterschool Pickups
       </div>
-    </div>
-    <div id="appliedWrap" hidden>
-      <h2 style="margin-top:16px;font-size:15px">Applied changes</h2>
-      <ul class="list" id="appliedList"></ul>
-      <p class="note">Saved in this browser only until the database is connected. Driver links don't see these yet.</p>
-    </div>
-  </section>
+      <h1>Every child, picked up on time.</h1>
+      <p class="lead">Sign in to see today's pickup routes, drivers and changes.</p>
 
-  <div id="dataNote"></div>
-  <div id="warnings"></div>
-  <section class="panel" id="travelPanel" hidden>
-    <h2>Driving times</h2>
-    <p class="note" id="travelInfo">Loading…</p>
-    <div class="row">
-      <button id="travelBtn" hidden>Refresh driving times</button>
-      <span class="status" id="travelStatus"></span>
-    </div>
-    <div id="travelWarn"></div>
-  </section>
+      <form id="loginForm" novalidate>
+        <label for="password">Staff password</label>
+        <div class="field">
+          <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+          <button type="submit" id="signIn">Sign in</button>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </form>
+      <div id="notice"></div>
 
-  <section class="panel" id="driverPanel" hidden>
-    <div id="driverPanelBody"></div>
-  </section>
-  <div class="grid" id="routes"></div>
-</main>
+      <p class="foot">Drivers: open the personal link the office sent you. It doesn't need a password.</p>
+    </section>
+  </main>
+
 <script>
   const $ = (id) => document.getElementById(id);
-  const dateInput = $("date");
+
+  // Where to go after signing in: only our own pages.
   const params = new URLSearchParams(location.search);
-  const onlyDriver = params.get("driver");
-  const staffView = !onlyDriver;
-  if (staffView) document.getElementById("manageLink").hidden = false;
-  if (params.get("date")) dateInput.value = params.get("date");
+  const wanted = params.get("next") || "";
+  const next = /^\/(schedule|manage)(\.html)?([?#].*)?$/.test(wanted) ? wanted : "/schedule";
 
-  const STORE = "pickup-changes";
-  let applied = readStore();
-  let proposed = [];
-  let llmReady = false;
-
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function setStatus(text, err = false) {
+    $("status").textContent = text;
+    $("status").className = err ? "status err" : "status";
   }
-  function readStore() {
+
+  async function check() {
     try {
-      const list = JSON.parse(localStorage.getItem(STORE) || "[]");
-      const cutoff = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
-      return Array.isArray(list) ? list.filter((c) => c.date >= cutoff) : [];
-    } catch { return []; }
-  }
-  function writeStore() {
-    try { localStorage.setItem(STORE, JSON.stringify(applied)); } catch {}
-  }
-  const key = (c) => [c.type, c.date, c.studentId, c.driverId, c.schoolId, c.dismissal].join("|");
-  async function post(url, body) {
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({ error: "Unexpected response" }));
-    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
-    return data;
-  }
-
-  function pickups(r) {
-    const n = r.stops.filter((s) => s.type === "pickup").length;
-    return `${n} pickup${n === 1 ? "" : "s"}`;
-  }
-
-  // ---------- schedule ----------
-  let current = null;
-  async function load() {
-    let data;
-    try {
-      data = await post(`/api/schedule`, { date: dateInput.value || undefined, changes: staffView ? applied : [] });
-    } catch (e) { $("summary").textContent = e.message; return; }
-    current = data;
-    if (!dateInput.value) dateInput.value = data.date;
-
-    const c = data.counts;
-    $("summary").textContent =
-      `${data.weekday.toUpperCase()} ${data.date} · ${c.students} students · ${c.schools} schools · ${c.drivers} drivers` +
-      (staffView && data.waits && c.students ? ` · longest wait ${data.waits.longest} min (target ${data.waits.target})` : "");
-
-    let note = "";
-    if (data.dataSource === "sample") {
-      note = data.database === "needs-secret-key"
-        ? "Showing made-up sample data. Supabase has only the publishable key; add SUPABASE_SECRET_KEY in Cloudflare to use your database."
-        : "Showing made-up sample data. Supabase isn't connected.";
-    } else if (data.counts.students === 0 && data.routes.length === 0) {
-      note = "Connected to Supabase, but there are no students for this day. Run supabase/seed.sql to load sample data, or add your own.";
-    }
-    $("dataNote").innerHTML = note ? `<div class="warn">${esc(note)}</div>` : "";
-
-    if (staffView && data.driversOff?.length) {
-      $("summary").textContent += ` · off: ${data.driversOff.map((d) => d.name).join(", ")}`;
-    }
-    const warns = [...data.warnings, ...data.unassigned.map((s) => `Not assigned: ${s.name} (${s.school})`)];
-    $("warnings").innerHTML = warns.length
-      ? `<div class="warn"><strong>Needs attention</strong><ul>${warns.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : "";
-
-    const routes = data.routes.filter((r) => !onlyDriver || r.driverId === onlyDriver);
-    $("routes").innerHTML = routes.length ? routes.map((r) => `
-      <section class="card" data-driver="${esc(r.driverId)}">
-        <div class="card-head">
-          <div>
-            <h2>${esc(r.driverName)}</h2>
-            <div class="meta">${r.seats} seats · ${pickups(r)}</div>
-          </div>
-          ${staffView ? `<button class="msgBtn">Text message</button>` : ""}
-        </div>
-        <ol>${r.stops.map((s) => `
-          <li class="stop">
-            <span class="time">${esc(s.time)}</span>
-            ${s.type === "pickup" ? "Pick up" : "Drop off"} · ${esc(s.place)}
-            ${s.dismissal ? `<span class="tag">dismissal ${esc(s.dismissal)}</span>` : ""}
-            ${s.waitMinutes > 0 ? `<span class="tag ${s.waitMinutes > (data.waits?.target ?? 30) ? "late" : ""}">wait ${s.waitMinutes} min</span>` : ""}
-            <div class="kids">${s.type === "pickup"
-              ? s.students.map((k) => esc(k.name) + (k.notes ? ` <em>(${esc(k.notes)})</em>` : "")).join(", ")
-              : `${s.students.length} students`}</div>
-          </li>`).join("")}
-        </ol>
-        <div class="msg" hidden></div>
-      </section>`).join("") : `<p class="empty">${!staffView && data.driversOff?.some((d) => d.id === onlyDriver) ? "You have no pickups this day." : "No pickups for this day."}</p>`;
-    renderApplied();
-    renderDriverPanel(data);
-  }
-
-  // ---------- driving times (Google Routes) ----------
-  async function loadTravel() {
-    if (!staffView) return;
-    let t;
-    try {
-      const res = await fetch("/api/travel-times");
-      t = await res.json();
-      if (!res.ok) throw new Error(t.error || `Error ${res.status}`);
-    } catch (e) {
-      $("travelPanel").hidden = false;
-      $("travelInfo").textContent = e.message;
-      return;
-    }
-    $("travelPanel").hidden = false;
-    if (t.database !== "connected") {
-      $("travelInfo").textContent = "Using the sample driving times (database not connected).";
-      return;
-    }
-    const when = t.lastUpdatedFromGoogle ? new Date(t.lastUpdatedFromGoogle).toLocaleString() : null;
-    $("travelInfo").textContent = when
-      ? `${t.fromGoogle} of ${t.pairs} driving times come from Google with weekday-afternoon traffic, last updated ${when}. They refresh automatically every Monday${t.refreshesToday != null ? `; refreshed ${t.refreshesToday} of ${t.refreshesPerDay} times today` : ""}.`
-      : `${t.pairs} driving times, all entered by hand. Google traffic times aren't set up yet.`;
-    $("travelBtn").hidden = Boolean(t.setupProblem);
-    $("travelBtn").disabled = !t.canRefresh;
-    $("travelStatus").textContent = t.canRefresh ? "" : (t.reason || "");
-    const warn = [];
-    if (t.setupProblem) warn.push(t.setupProblem);
-    if (t.missingAddresses?.length) warn.push(`No address for: ${t.missingAddresses.join(", ")}. Add it in the Supabase schools table to use Google times for them.`);
-    $("travelWarn").innerHTML = warn.length ? `<div class="warn"><ul>${warn.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : "";
-  }
-
-  $("travelBtn").addEventListener("click", async () => {
-    $("travelBtn").disabled = true;
-    $("travelStatus").className = "status";
-    $("travelStatus").textContent = "Asking Google…";
-    try {
-      const r = await post("/api/travel-times/refresh", {});
-      $("travelStatus").textContent = r.summary;
-      if (r.problems?.length) {
-        $("travelWarn").innerHTML = `<div class="warn"><strong>Some routes failed</strong><ul>${r.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>`;
+      const s = await (await fetch("/api/session", { cache: "no-store" })).json();
+      if (s.loggedIn) { location.replace(next); return; }
+      if (!s.enabled) {
+        $("password").disabled = true;
+        $("signIn").disabled = true;
+        $("notice").innerHTML = '<div class="notice">Sign-in isn\'t set up yet. In Cloudflare, add a <strong>STAFF_PASSWORD</strong> secret to the Worker (Settings → Variables and Secrets).</div>';
       }
-      await load();
-      const msg = r.summary;
-      await loadTravel();
-      $("travelStatus").textContent = msg;
-    } catch (err) {
-      $("travelStatus").className = "status err";
-      $("travelStatus").textContent = err.message;
-      $("travelBtn").disabled = false;
+    } catch {
+      setStatus("Couldn't reach the server. Check your connection and try again.", true);
     }
-  });
-
-  // ---------- driver: "I can't work this day" ----------
-  function renderDriverPanel(data) {
-    if (staffView) return;
-    const panel = $("driverPanel"), body = $("driverPanelBody");
-    const isOff = data.driversOff?.some((d) => d.id === onlyDriver);
-    const hasRoute = data.routes.some((r) => r.driverId === onlyDriver);
-    const past = data.date < todayLocal();
-    panel.hidden = past || (!isOff && !hasRoute);
-    if (panel.hidden) return;
-    body.innerHTML = isOff
-      ? `<h2>You're marked as not working on <span style="white-space:nowrap">${esc(data.date)}</span></h2>
-         <p class="note">Your students have been given to the other drivers.</p>
-         <div class="row"><button id="availBtn">I can work after all</button><span class="status" id="driverStatus"></span></div>`
-      : `<h2>Can't drive on <span style="white-space:nowrap">${esc(data.date)}</span>?</h2>
-         <p class="note">Let the office know. Your students will be given to the other drivers.</p>
-         <div class="row"><button class="primary" id="offBtn">I can't work this day</button><span class="status" id="driverStatus"></span></div>
-         <div id="offPreview"></div>`;
   }
 
-  $("driverPanel").addEventListener("click", async (e) => {
-    const date = current?.date;
-    const status = () => $("driverStatus");
-    const fail = (err) => { status().className = "status err"; status().textContent = err.message; };
-    if (e.target.id === "offBtn") {
-      e.target.disabled = true;
-      status().className = "status"; status().textContent = "Checking…";
-      try {
-        const r = await post("/api/driver-unavailable", { driverId: onlyDriver, date, preview: true });
-        status().textContent = "";
-        $("offPreview").innerHTML = `
-          <div class="${r.allCovered ? "note" : "warn"}" style="margin-top:10px">${esc(r.summary)}</div>
-          <div class="row"><button class="primary" id="offConfirm">Yes, I can't work on ${esc(date)}</button>
-          <button id="offCancel">Cancel</button></div>`;
-      } catch (err) { fail(err); }
-      e.target.disabled = false;
-    } else if (e.target.id === "offCancel") {
-      $("offPreview").innerHTML = "";
-    } else if (e.target.id === "offConfirm") {
-      e.target.disabled = true;
-      try {
-        const r = await post("/api/driver-unavailable", { driverId: onlyDriver, date });
-        await load();
-        $("driverStatus").className = "status";
-        $("driverStatus").textContent = r.saved ? "Saved. The office can see it." : r.summary;
-      } catch (err) { fail(err); e.target.disabled = false; }
-    } else if (e.target.id === "availBtn") {
-      e.target.disabled = true;
-      try {
-        await post("/api/driver-available", { driverId: onlyDriver, date });
-        await load();
-      } catch (err) { fail(err); e.target.disabled = false; }
-    }
-  });
-
-  // ---------- driver message (AI) ----------
-  $("routes").addEventListener("click", async (e) => {
-    const card = e.target.closest(".card");
-    if (!card) return;
-    const box = card.querySelector(".msg");
-    if (e.target.classList.contains("copyBtn")) {
-      const text = box.querySelector("pre").textContent;
-      try { await navigator.clipboard.writeText(text); e.target.textContent = "Copied"; }
-      catch { e.target.textContent = "Select and copy"; }
-      return;
-    }
-    if (!e.target.classList.contains("msgBtn")) return;
-    const btn = e.target;
-    btn.disabled = true; btn.textContent = "Writing…";
-    box.hidden = false; box.innerHTML = `<span class="status">Writing message…</span>`;
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const password = $("password").value;
+    if (!password) { setStatus("Enter the staff password.", true); $("password").focus(); return; }
+    $("signIn").disabled = true;
+    setStatus("Signing in…");
     try {
-      const m = await post("/api/driver-message", { date: current.date, driverId: card.dataset.driver, changes: applied });
-      box.innerHTML = `<div class="row" style="margin:0;justify-content:space-between">
-          <span class="meta">${m.source === "nvidia" ? "Written by AI · check before sending" : "Plain version" + (m.note ? " · " + esc(m.note) : "")}</span>
-          <button class="copyBtn">Copy</button></div><pre>${esc(m.text)}</pre>`;
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't sign in.");
+      setStatus("Signed in. Opening the schedule…");
+      location.replace(next);
     } catch (err) {
-      box.innerHTML = `<span class="status err">${esc(err.message)}</span>`;
+      setStatus(err.message, true);
+      $("password").select();
+      $("signIn").disabled = false;
     }
-    btn.disabled = false; btn.textContent = "Text message";
   });
 
-  // ---------- daily changes (AI) ----------
-  async function parse() {
-    const text = $("changeText").value.trim();
-    if (!text) { $("parseStatus").textContent = "Type or paste a message first."; return; }
-    $("parseBtn").disabled = true;
-    $("parseStatus").className = "status";
-    $("parseStatus").textContent = "Reading…";
-    try {
-      const r = await post("/api/changes/parse", { text, today: todayLocal() });
-      proposed = r.changes;
-      const notes = [...r.unclear, ...r.rejected.map((x) => `Skipped one item: ${x.reason}`)];
-      $("proposedList").innerHTML = proposed.length
-        ? proposed.map((c, i) => `<li><input type="checkbox" checked data-i="${i}" id="p${i}">
-            <label for="p${i}" class="grow" style="display:inline;color:inherit;font-size:inherit">${esc(c.summary)}</label></li>`).join("")
-        : `<li>No changes found.</li>`;
-      $("unclear").hidden = !notes.length;
-      $("unclear").innerHTML = `<strong>Please check</strong><ul>${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
-      $("applyBtn").hidden = !proposed.length;
-      $("proposed").hidden = false;
-      $("parseStatus").textContent = proposed.length ? "Review and apply:" : "";
-    } catch (e) {
-      $("parseStatus").className = "status err";
-      $("parseStatus").textContent = e.message;
-    }
-    $("parseBtn").disabled = false;
-  }
-
-  function applySelected() {
-    const picked = [...$("proposedList").querySelectorAll("input:checked")].map((el) => proposed[Number(el.dataset.i)]);
-    const have = new Set(applied.map(key));
-    for (const c of picked) if (!have.has(key(c))) applied.push(c);
-    applied.sort((a, b) => a.date.localeCompare(b.date));
-    writeStore();
-    discard();
-    $("changeText").value = "";
-    $("parseStatus").textContent = `Applied ${picked.length} change${picked.length === 1 ? "" : "s"}.`;
-    load();
-  }
-
-  function discard() { proposed = []; $("proposed").hidden = true; $("parseStatus").textContent = ""; }
-
-  function renderApplied() {
-    if (!staffView) return;
-    $("appliedWrap").hidden = !applied.length;
-    $("appliedList").innerHTML = applied.map((c, i) =>
-      `<li class="applied"><span class="grow">${esc(c.summary)}</span><button class="link" data-remove="${i}">Remove</button></li>`).join("");
-  }
-
-  $("appliedList").addEventListener("click", (e) => {
-    const i = e.target.dataset.remove;
-    if (i == null) return;
-    applied.splice(Number(i), 1);
-    writeStore();
-    load();
-  });
-
-  function todayLocal() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-
-  $("parseBtn").addEventListener("click", parse);
-  $("applyBtn").addEventListener("click", applySelected);
-  $("discardBtn").addEventListener("click", discard);
-  dateInput.addEventListener("change", load);
-
-  fetch("/api/health").then((r) => r.json()).then((h) => {
-    llmReady = h.llm;
-    if (staffView) $("changesPanel").hidden = false;
-    if (!llmReady) {
-      $("parseBtn").disabled = true;
-      $("parseStatus").textContent = "AI isn't set up yet (missing NVIDIA_API_KEY).";
-    }
-  }).catch(() => {});
-  load();
-  loadTravel();
+  check();
 </script>
 </body>
 </html>

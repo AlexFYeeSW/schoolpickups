@@ -103,20 +103,37 @@ async function handle(request, env) {
     return handleStaff(request, env, path);
   }
 
+  // Old driver links (/?driver=…) now live at /schedule?driver=….
+  if (path === "/" && url.searchParams.has("driver")) {
+    return Response.redirect(new URL(`/schedule${url.search}`, url.origin).toString(), 302);
+  }
+
   if (path === "/api/health") {
     return json({ ok: true, llm: llmEnabled(env), database: dbStatus(env) });
   }
 
-  // GET ?date=… for the plain schedule; POST {date, changes} to include today's changes.
+  // Staff-only routes need a staff login (the landing page's password).
+  const staff = await isStaff(request, env);
+  const noStore = { "Cache-Control": "no-store" };
+  const loginNeeded = () => json({ error: "Please log in as staff.", login: "/" }, 401, noStore);
+  const STAFF_ONLY = ["/api/changes/parse", "/api/ai-check", "/api/travel-times", "/api/travel-times/refresh", "/api/driver-message"];
+  if (STAFF_ONLY.includes(path) && !staff) return loginNeeded();
+
+  // GET ?date=…&driver=… or POST {date, changes, driverId}.
+  // Staff get every route; a driver link (driverId, no login) gets only that driver's route.
   if (path === "/api/schedule") {
     let date = url.searchParams.get("date");
+    let driverId = url.searchParams.get("driver");
     let changes = [];
     if (request.method === "POST") {
       const body = await readBody(request);
       if (!body) return json({ error: "Invalid JSON body" }, 400);
       date = body.date;
       changes = body.changes ?? [];
+      driverId = typeof body.driverId === "string" ? body.driverId : driverId;
     }
+    if (!staff && !driverId) return loginNeeded();
+    if (!staff) changes = []; // only staff can try out unsaved changes
     date ||= localNow(env.TIMEZONE).date;
     if (!DATE_RE.test(date)) return json({ error: "date must be YYYY-MM-DD" }, 400);
     const data = await dataWithChanges(env, changes);
@@ -124,7 +141,22 @@ async function handle(request, env) {
     try {
       schedule = buildDailySchedule(data, date);
     } catch (err) {
-      return json({ error: err.message, dataSource: data.source }, 422);
+      return json({ error: staff ? err.message : "The schedule isn't available right now. Please contact the office.", dataSource: data.source }, 422, noStore);
+    }
+
+    if (!staff) {
+      // Only this driver's own stops: no other routes or other children's names.
+      return json({
+        date: schedule.date,
+        weekday: schedule.weekday,
+        counts: schedule.counts,
+        routes: schedule.routes.filter((r) => r.driverId === driverId),
+        driversOff: schedule.driversOff.filter((d) => d.id === driverId),
+        warnings: [],
+        unassigned: [],
+        dataSource: data.source,
+        database: data.dbStatus,
+      }, 200, noStore);
     }
 
     if (url.searchParams.get("format") === "text") {
@@ -136,7 +168,7 @@ async function handle(request, env) {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
-    return json({ ...schedule, dataSource: data.source, database: data.dbStatus });
+    return json({ ...schedule, dataSource: data.source, database: data.dbStatus }, 200, noStore);
   }
 
   // POST {text} → AI reads a message and proposes changes for staff to confirm.
@@ -195,7 +227,7 @@ async function handle(request, env) {
   // POST {driverId, date, preview?} → a driver reports they can't work that day.
   if (path === "/api/driver-unavailable" && request.method === "POST") {
     if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
-    return markUnavailable(env, await readBody(request), "Reported by the driver on the website");
+    return markUnavailable(env, await readBody(request), "Reported by the driver on the website", noStore, { driverView: !staff });
   }
 
   // POST {driverId, date} → undo: the driver can work after all.
@@ -227,7 +259,7 @@ async function handle(request, env) {
  * remaining drivers. With preview: true nothing is saved; pages use this to
  * show who takes the students and whether everyone is still covered.
  */
-async function markUnavailable(env, body, note, headers = {}) {
+async function markUnavailable(env, body, note, headers = {}, { driverView = false } = {}) {
   const date = body?.date;
   const driverId = typeof body?.driverId === "string" ? body.driverId : "";
   if (!DATE_RE.test(date ?? "") || Number.isNaN(Date.parse(date))) return json({ error: "Pick a date." }, 400, headers);
@@ -236,7 +268,11 @@ async function markUnavailable(env, body, note, headers = {}) {
 
   const data = await loadData(env);
   if (!data.drivers.some((d) => d.id === driverId)) return json({ error: "Unknown driver." }, 404, headers);
-  const { before, after, ...report } = rescheduleWithoutDriver(data, driverId, date);
+  const { before, after, ...full } = rescheduleWithoutDriver(data, driverId, date);
+  // A driver only needs the summary, not other children's names.
+  const report = driverView
+    ? { date: full.date, driver: full.driver, scheduledToWork: full.scheduledToWork, allCovered: full.allCovered, summary: full.summary }
+    : full;
 
   if (body.preview || !report.scheduledToWork) return json({ ...report, saved: false }, 200, headers);
   if (data.source !== "supabase") {

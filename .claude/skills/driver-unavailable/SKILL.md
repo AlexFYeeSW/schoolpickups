@@ -12,7 +12,7 @@ explained, and recorded correctly.
 
 ## How it works in the app
 
-- A driver opens their link (`/?driver=<id>`) and clicks **I can't work this
+- A driver opens their link (`/schedule?driver=<id>`) and clicks **I can't work this
   day**. The page first calls `POST /api/driver-unavailable` with
   `preview: true` to show the effect, then again without it to save.
 - Staff can also do it from the Manage page (`/manage.html` → Drivers →

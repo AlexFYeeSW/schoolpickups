@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="A school van parked outside a school while children with backpacks walk to it">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fbfe8"/>
+      <stop offset="0.55" stop-color="#c9e6f6"/>
+      <stop offset="1" stop-color="#fbeed6"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff3c4" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#fff3c4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="asphalt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5d636c"/>
+      <stop offset="1" stop-color="#4b5058"/>
+    </linearGradient>
+    <linearGradient id="vanBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e4e9f0"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d5468"/>
+      <stop offset="1" stop-color="#22313f"/>
+    </linearGradient>
+
+    <!-- A child, drawn with feet at (0,0), facing right. -->
+    <g id="kidLegs">
+      <rect x="-9" y="-30" width="7" height="30" rx="3" fill="#2f3542"/>
+      <rect x="2" y="-30" width="7" height="30" rx="3" fill="#2f3542"/>
+      <rect x="-11" y="-4" width="11" height="5" rx="2.5" fill="#1e2229"/>
+      <rect x="2" y="-4" width="11" height="5" rx="2.5" fill="#1e2229"/>
+    </g>
+  </defs>
+
+  <!-- Sky, sun, clouds -->
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1390" cy="160" r="190" fill="url(#sunGlow)"/>
+  <circle cx="1390" cy="160" r="62" fill="#ffd56b"/>
+  <g fill="#ffffff" opacity="0.9">
+    <ellipse cx="290" cy="140" rx="90" ry="30"/><ellipse cx="350" cy="122" rx="60" ry="34"/><ellipse cx="230" cy="150" rx="55" ry="22"/>
+    <ellipse cx="930" cy="96" rx="110" ry="28"/><ellipse cx="990" cy="80" rx="62" ry="30"/><ellipse cx="860" cy="104" rx="56" ry="20"/>
+  </g>
+
+  <!-- Hills and trees behind the school -->
+  <path d="M0 520 Q 260 430 520 500 T 1040 480 T 1600 470 V 700 H 0 Z" fill="#a8d08b"/>
+  <path d="M0 580 Q 340 500 700 560 T 1600 540 V 700 H 0 Z" fill="#8fc275"/>
+  <g>
+    <rect x="96" y="470" width="14" height="120" fill="#6b4a33"/>
+    <circle cx="103" cy="450" r="62" fill="#5d9c58"/><circle cx="62" cy="488" r="44" fill="#4f8f4a"/><circle cx="146" cy="488" r="46" fill="#57974f"/>
+    <rect x="1508" y="440" width="16" height="170" fill="#6b4a33"/>
+    <circle cx="1516" cy="420" r="74" fill="#5d9c58"/><circle cx="1466" cy="466" r="50" fill="#4f8f4a"/><circle cx="1566" cy="468" r="52" fill="#57974f"/>
+  </g>
+
+  <!-- School building -->
+  <g>
+    <rect x="170" y="318" width="700" height="330" fill="#c4553f"/>
+    <rect x="160" y="300" width="720" height="24" fill="#8f3a2b"/>
+    <!-- entrance block -->
+    <rect x="420" y="236" width="200" height="412" fill="#cf6550"/>
+    <rect x="410" y="220" width="220" height="22" fill="#8f3a2b"/>
+    <circle cx="520" cy="300" r="34" fill="#fbf6ee" stroke="#8f3a2b" stroke-width="6"/>
+    <line x1="520" y1="300" x2="520" y2="278" stroke="#2f3542" stroke-width="4" stroke-linecap="round"/>
+    <line x1="520" y1="300" x2="536" y2="309" stroke="#2f3542" stroke-width="4" stroke-linecap="round"/>
+    <rect x="452" y="452" width="136" height="38" rx="4" fill="#fbf6ee"/>
+    <text x="520" y="479" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="3" fill="#8f3a2b">SCHOOL</text>
+    <!-- doors -->
+    <rect x="466" y="520" width="108" height="128" fill="#fbf6ee"/>
+    <rect x="474" y="528" width="44" height="120" fill="#5b3a29"/>
+    <rect x="522" y="528" width="44" height="120" fill="#5b3a29"/>
+    <rect x="480" y="536" width="32" height="44" fill="#9fd0ea"/>
+    <rect x="528" y="536" width="32" height="44" fill="#9fd0ea"/>
+    <rect x="440" y="648" width="160" height="10" fill="#d9d2c5"/>
+    <rect x="428" y="658" width="184" height="10" fill="#cbc3b5"/>
+    <!-- windows -->
+    <g fill="#d8eef9" stroke="#fbf6ee" stroke-width="6">
+      <rect x="200" y="356" width="64" height="74"/><rect x="290" y="356" width="64" height="74"/>
+      <rect x="200" y="470" width="64" height="74"/><rect x="290" y="470" width="64" height="74"/>
+      <rect x="686" y="356" width="64" height="74"/><rect x="776" y="356" width="64" height="74"/>
+      <rect x="686" y="470" width="64" height="74"/><rect x="776" y="470" width="64" height="74"/>
+      <rect x="470" y="364" width="100" height="60"/>
+    </g>
+    <g stroke="#fbf6ee" stroke-width="4">
+      <line x1="232" y1="356" x2="232" y2="430"/><line x1="322" y1="356" x2="322" y2="430"/>
+      <line x1="232" y1="470" x2="232" y2="544"/><line x1="322" y1="470" x2="322" y2="544"/>
+      <line x1="718" y1="356" x2="718" y2="430"/><line x1="808" y1="356" x2="808" y2="430"/>
+      <line x1="718" y1="470" x2="718" y2="544"/><line x1="808" y1="470" x2="808" y2="544"/>
+      <line x1="520" y1="364" x2="520" y2="424"/>
+    </g>
+    <!-- flagpole -->
+    <rect x="922" y="250" width="6" height="400" fill="#b9c0c8"/>
+    <circle cx="925" cy="248" r="7" fill="#e0b53d"/>
+    <path d="M928 262 H 1012 L 996 290 L 1012 318 H 928 Z" fill="#2f6fb5"/>
+    <circle cx="962" cy="290" r="9" fill="#ffffff"/>
+  </g>
+
+  <!-- Lawn, bushes, pickup lane, curb, sidewalk -->
+  <rect x="0" y="640" width="1600" height="44" fill="#7cbf5e"/>
+  <g fill="#4f8f4a">
+    <ellipse cx="230" cy="648" rx="70" ry="26"/><ellipse cx="350" cy="652" rx="58" ry="22"/>
+    <ellipse cx="700" cy="650" rx="64" ry="24"/><ellipse cx="815" cy="648" rx="60" ry="24"/>
+  </g>
+  <rect x="0" y="684" width="1600" height="122" fill="url(#asphalt)"/>
+  <g fill="#f2d16b" opacity="0.8">
+    <rect x="40" y="742" width="70" height="6"/><rect x="190" y="742" width="70" height="6"/><rect x="340" y="742" width="70" height="6"/><rect x="490" y="742" width="70" height="6"/><rect x="640" y="742" width="70" height="6"/>
+  </g>
+  <rect x="0" y="806" width="1600" height="10" fill="#d4ccbe"/>
+  <rect x="0" y="816" width="1600" height="66" fill="#ece6da"/>
+  <g stroke="#d8d0c2" stroke-width="2">
+    <line x1="120" y1="816" x2="104" y2="882"/><line x1="320" y1="816" x2="304" y2="882"/><line x1="520" y1="816" x2="504" y2="882"/>
+    <line x1="720" y1="816" x2="704" y2="882"/><line x1="920" y1="816" x2="904" y2="882"/><line x1="1120" y1="816" x2="1104" y2="882"/>
+    <line x1="1320" y1="816" x2="1304" y2="882"/><line x1="1520" y1="816" x2="1504" y2="882"/>
+  </g>
+  <rect x="0" y="882" width="1600" height="18" fill="#7cbf5e"/>
+
+  <!-- Van (facing right), side door open toward the sidewalk -->
+  <g>
+    <ellipse cx="1150" cy="806" rx="270" ry="14" fill="#000000" opacity="0.18"/>
+    <path d="M925 560 H 1290 Q 1322 560 1342 590 L 1390 660 Q 1402 676 1402 696 V 772 Q 1402 788 1386 788 H 916 Q 900 788 900 772 V 586 Q 900 560 925 560 Z" fill="url(#vanBody)" stroke="#b7c2cf" stroke-width="3"/>
+    <rect x="901" y="700" width="500" height="22" fill="#2f6fb5"/>
+    <rect x="901" y="724" width="500" height="6" fill="#f2b33d"/>
+    <!-- windows -->
+    <rect x="924" y="584" width="88" height="62" rx="9" fill="url(#glass)"/>
+    <path d="M1176 584 H 1284 Q 1300 584 1312 600 L 1344 646 H 1176 Z" fill="url(#glass)"/>
+    <path d="M1330 584 L 1380 656 H 1366 L 1320 590 Z" fill="#ffffff" opacity="0.18"/>
+    <!-- open side door: dark doorway with a seat and a step -->
+    <rect x="1030" y="580" width="128" height="204" rx="6" fill="#2b3541"/>
+    <rect x="1046" y="640" width="96" height="40" rx="8" fill="#4d5f73"/>
+    <rect x="1046" y="680" width="96" height="10" rx="4" fill="#3d4b5b"/>
+    <rect x="1024" y="776" width="140" height="10" rx="3" fill="#9aa3ad"/>
+    <!-- slid-back door panel over the rear -->
+    <rect x="1014" y="570" width="20" height="214" rx="4" fill="#dfe5ec" stroke="#b7c2cf" stroke-width="2"/>
+    <text x="1268" y="694" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" letter-spacing="1.5" fill="#2f6fb5">AFTERSCHOOL</text>
+    <rect x="1330" y="612" width="16" height="24" rx="4" fill="#b7c2cf"/>
+    <ellipse cx="1396" cy="702" rx="6" ry="12" fill="#ffe08a"/>
+    <rect x="1376" y="756" width="34" height="20" rx="6" fill="#9aa3ad"/>
+    <rect x="890" y="756" width="24" height="20" rx="6" fill="#9aa3ad"/>
+    <rect x="904" y="660" width="8" height="26" rx="3" fill="#e2574c"/>
+    <!-- wheels -->
+    <circle cx="990" cy="788" r="42" fill="#1f2328"/><circle cx="990" cy="788" r="19" fill="#b8c0c9"/><circle cx="990" cy="788" r="6" fill="#7d8691"/>
+    <circle cx="1316" cy="788" r="42" fill="#1f2328"/><circle cx="1316" cy="788" r="19" fill="#b8c0c9"/><circle cx="1316" cy="788" r="6" fill="#7d8691"/>
+  </g>
+
+  <!-- Children walking to the van (feet on the sidewalk) -->
+  <g>
+    <!-- kid 1 -->
+    <g transform="translate(640 868)">
+      <use href="#kidLegs"/>
+      <rect x="-19" y="-62" width="14" height="30" rx="5" fill="#f2b33d"/>
+      <rect x="-13" y="-66" width="28" height="40" rx="10" fill="#e85d75"/>
+      <line x1="12" y1="-58" x2="22" y2="-36" stroke="#e85d75" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="1" cy="-80" r="14" fill="#c68642"/>
+      <path d="M-13 -84 Q 1 -102 15 -84 Q 8 -90 -13 -84 Z" fill="#2b1d14"/>
+    </g>
+    <!-- kid 2 -->
+    <g transform="translate(748 872)">
+      <use href="#kidLegs"/>
+      <rect x="-20" y="-66" width="15" height="32" rx="5" fill="#2f6fb5"/>
+      <rect x="-13" y="-70" width="28" height="44" rx="10" fill="#4caf8e"/>
+      <line x1="12" y1="-62" x2="24" y2="-42" stroke="#4caf8e" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="1" cy="-86" r="15" fill="#f1c7a5"/>
+      <path d="M-14 -88 Q 0 -108 16 -90 L 16 -80 Q 6 -94 -14 -88 Z" fill="#a0602e"/>
+      <path d="M-15 -88 Q -20 -70 -10 -64" stroke="#a0602e" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </g>
+    <!-- kid 3 (smaller) -->
+    <g transform="translate(850 870) scale(0.88)">
+      <use href="#kidLegs"/>
+      <rect x="-20" y="-62" width="14" height="30" rx="5" fill="#e85d75"/>
+      <rect x="-13" y="-66" width="28" height="40" rx="10" fill="#6c63ff"/>
+      <line x1="12" y1="-58" x2="22" y2="-36" stroke="#6c63ff" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="1" cy="-81" r="14" fill="#8d5524"/>
+      <path d="M-13 -86 Q 1 -100 15 -86 Q 2 -92 -13 -86 Z" fill="#1b130d"/>
+    </g>
+    <!-- kid 4 stepping toward the open door -->
+    <g transform="translate(1094 858)">
+      <use href="#kidLegs"/>
+      <rect x="-20" y="-66" width="15" height="32" rx="5" fill="#4caf8e"/>
+      <rect x="-13" y="-70" width="28" height="44" rx="10" fill="#f2b33d"/>
+      <line x1="12" y1="-62" x2="28" y2="-56" stroke="#f2b33d" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="1" cy="-86" r="15" fill="#e0ac69"/>
+      <path d="M-14 -90 Q 1 -108 16 -90 Q 4 -96 -14 -90 Z" fill="#3a2618"/>
+    </g>
+    <!-- staff member by the door, waving -->
+    <g transform="translate(1196 876)">
+      <rect x="-12" y="-46" width="9" height="46" rx="4" fill="#2f3542"/>
+      <rect x="3" y="-46" width="9" height="46" rx="4" fill="#2f3542"/>
+      <rect x="-14" y="-5" width="13" height="6" rx="3" fill="#1e2229"/>
+      <rect x="2" y="-5" width="13" height="6" rx="3" fill="#1e2229"/>
+      <rect x="-18" y="-104" width="36" height="62" rx="12" fill="#2f6fb5"/>
+      <rect x="-6" y="-96" width="12" height="14" rx="2" fill="#f2b33d"/>
+      <line x1="-14" y1="-96" x2="-34" y2="-66" stroke="#2f6fb5" stroke-width="9" stroke-linecap="round"/>
+      <line x1="14" y1="-96" x2="34" y2="-132" stroke="#2f6fb5" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="35" cy="-136" r="6" fill="#c68642"/>
+      <circle cx="0" cy="-122" r="17" fill="#c68642"/>
+      <path d="M-18 -126 Q 0 -146 18 -126 Z" fill="#2f6fb5"/>
+      <rect x="0" y="-130" width="26" height="6" rx="3" fill="#2f6fb5"/>
+    </g>
+  </g>
+</svg>
