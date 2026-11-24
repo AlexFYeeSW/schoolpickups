@@ -4,6 +4,7 @@
 
 import { chat, llmEnabled } from "./llm.js";
 import { weekdayOf } from "./scheduler.js";
+import { localNow, parseClock, clockLabel } from "./time.js";
 
 export const MAX_TEXT_LENGTH = 2000;
 const TYPES = ["student_absent", "driver_off", "dismissal_change", "extra_pickup"];
@@ -115,4 +116,41 @@ ${roster}`;
   const { valid, rejected } = validateChanges(data, parsed.changes);
   const unclear = (Array.isArray(parsed.unclear) ? parsed.unclear : []).filter((u) => typeof u === "string").slice(0, 20);
   return { changes: valid, unclear, rejected };
+}
+
+// ---------- same-day cutoff ----------
+
+export const DEFAULT_CHANGES_CUTOFF = "13:30";
+
+/**
+ * Whether the Daily changes box still accepts changes for today. After the
+ * cutoff (CHANGES_CUTOFF, default 1:30 PM local time) changes for today are
+ * refused; changes for later days are always accepted.
+ */
+export function changesWindow(env, now = new Date()) {
+  const cutoff = parseClock(env.CHANGES_CUTOFF) ?? parseClock(DEFAULT_CHANGES_CUTOFF);
+  const t = localNow(env.TIMEZONE, now);
+  return {
+    today: t.date,
+    cutoff: clockLabel(cutoff),
+    closedForToday: t.hour * 60 + t.minute >= cutoff,
+  };
+}
+
+/** Move changes for today into `rejected` once today's window has closed. */
+export function applyCutoff(result, window) {
+  if (!window.closedForToday) return result;
+  const late = result.changes.filter((c) => c.date === window.today);
+  if (!late.length) return result;
+  return {
+    ...result,
+    changes: result.changes.filter((c) => c.date !== window.today),
+    rejected: [
+      ...result.rejected,
+      ...late.map((c) => ({
+        change: c,
+        reason: `${c.summary}: changes for today closed at ${window.cutoff}. Contact the driver directly.`,
+      })),
+    ],
+  };
 }

@@ -76,6 +76,7 @@
   <section class="panel" id="changesPanel" hidden>
     <h2>Daily changes</h2>
     <p class="note">Paste a message from a parent, school or driver. The AI suggests changes; nothing is applied until you confirm.</p>
+    <p class="note" id="cutoffNote"></p>
     <textarea id="changeText" maxlength="2000" placeholder="e.g. Leo is absent Thursday. Driver B is off today. Maple has early release at 1:30 tomorrow."></textarea>
     <div class="row">
       <button class="primary" id="parseBtn">Read with AI</button>
@@ -166,6 +167,27 @@
     return `${n} pickup${n === 1 ? "" : "s"}`;
   }
 
+  // ---------- same-day cutoff for Daily changes ----------
+  let changesWin = null; // { today, cutoff, closedForToday } from the server
+  let winLoadedAt = 0;
+  function cutoffPassedSinceLoad() {
+    // The page may stay open past the cutoff; recheck against the time it was loaded.
+    if (!changesWin || changesWin.closedForToday) return Boolean(changesWin?.closedForToday);
+    const [h, m] = changesWin.cutoff.replace(/ (AM|PM)$/, "").split(":").map(Number);
+    const pm = changesWin.cutoff.endsWith("PM");
+    const cutoffMin = ((h % 12) + (pm ? 12 : 0)) * 60 + m;
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes() >= cutoffMin && Date.now() - winLoadedAt < 24 * 3600e3;
+  }
+  function renderCutoff() {
+    if (!staffView || !changesWin) return;
+    const closed = changesWin.closedForToday || cutoffPassedSinceLoad();
+    $("cutoffNote").innerHTML = closed
+      ? `<strong>Changes for today closed at ${esc(changesWin.cutoff)}.</strong> You can still enter changes for later days. For today, contact the driver directly.`
+      : `Changes for today are accepted until ${esc(changesWin.cutoff)}.`;
+    $("cutoffNote").style.color = closed ? "var(--warn)" : "";
+  }
+
   // ---------- schedule ----------
   let current = null;
   async function load() {
@@ -176,6 +198,7 @@
         : { date: dateInput.value || undefined, driverId: onlyDriver });
     } catch (e) { $("summary").textContent = e.message; return; }
     current = data;
+    if (data.changesWindow) { changesWin = data.changesWindow; winLoadedAt = Date.now(); renderCutoff(); }
     if (!dateInput.value) dateInput.value = data.date;
 
     const c = data.counts;
@@ -367,7 +390,8 @@
     $("parseStatus").className = "status";
     $("parseStatus").textContent = "Reading…";
     try {
-      const r = await post("/api/changes/parse", { text, today: todayLocal() });
+      const r = await post("/api/changes/parse", { text });
+      if (r.window) changesWin = r.window;
       proposed = r.changes;
       const notes = [...r.unclear, ...r.rejected.map((x) => `Skipped one item: ${x.reason}`)];
       $("proposedList").innerHTML = proposed.length
@@ -387,7 +411,17 @@
   }
 
   function applySelected() {
-    const picked = [...$("proposedList").querySelectorAll("input:checked")].map((el) => proposed[Number(el.dataset.i)]);
+    let picked = [...$("proposedList").querySelectorAll("input:checked")].map((el) => proposed[Number(el.dataset.i)]);
+    // Read before the cutoff but applied after it: same-day changes are no longer accepted.
+    if (changesWin?.closedForToday || cutoffPassedSinceLoad()) {
+      const late = picked.filter((c) => c.date === changesWin.today);
+      if (late.length) {
+        picked = picked.filter((c) => c.date !== changesWin.today);
+        $("unclear").hidden = false;
+        $("unclear").innerHTML = `<strong>Not applied</strong><ul>${late.map((c) => `<li>${esc(c.summary)}: changes for today closed at ${esc(changesWin.cutoff)}. Contact the driver directly.</li>`).join("")}</ul>`;
+        if (!picked.length) return;
+      }
+    }
     const have = new Set(applied.map(key));
     for (const c of picked) if (!have.has(key(c))) applied.push(c);
     applied.sort((a, b) => a.date.localeCompare(b.date));
@@ -435,6 +469,7 @@
   }).catch(() => {});
   load();
   loadTravel();
+  setInterval(renderCutoff, 60_000); // flips to "closed" at the cutoff without a reload
 </script>
 </body>
 </html>

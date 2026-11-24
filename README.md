@@ -34,6 +34,10 @@ type **Secret**). Check it's picked up at `/api/health` (`"llm": true`).
 - **Daily changes:** staff paste a message ("Leo absent Thursday, Driver B off
   today"). The AI proposes changes; each is checked against the real student,
   driver and school lists, and nothing is applied until staff confirm.
+  **After 1:30 PM** (Los Angeles time; `CHANGES_CUTOFF` in `wrangler.jsonc`),
+  changes for the same day are refused; changes for later days are still
+  accepted. A driver's "I can't work this day" button and Manage → Days off are
+  not affected by the cutoff.
 - **Text message:** each driver card can produce a friendly message to copy and
   send. If the AI drops any name or time, the plain version is used instead.
 - AI requests are limited to 10 per minute per visitor (`LLM_LIMITER`).

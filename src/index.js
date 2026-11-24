@@ -1,4 +1,5 @@
 import { buildDailySchedule } from "./scheduler.js";
+import { localNow } from "./time.js";
 import { loadData as loadFromDb, dbStatus, DbError, markDriverOff, clearDriverOff, listUpcomingDaysOff } from "./db.js";
 import { rescheduleWithoutDriver } from "./reschedule.js";
 import { travelStatus, refreshTravelTimes, MapsError } from "./maps.js";
@@ -8,7 +9,7 @@ import { InputError, listDrivers, createDriver, updateDriver, listStudents, crea
 // Cron expression for the weekly driving-time refresh (must match wrangler.jsonc).
 const WEEKLY_TRAVEL_CRON = "0 10 * * 1";
 import { driverMessage, llmEnabled, chat, LlmError, skippedModels } from "./llm.js";
-import { parseChanges, validateChanges, MAX_TEXT_LENGTH } from "./changes.js";
+import { parseChanges, validateChanges, MAX_TEXT_LENGTH, changesWindow, applyCutoff } from "./changes.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -25,22 +26,6 @@ async function dataWithChanges(env, changes) {
   return { ...data, exceptions: [...data.exceptions, ...valid] };
 }
 
-/** Today's date (YYYY-MM-DD) and hour in the business's time zone. */
-function localNow(timeZone, now = new Date()) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(now)
-      .map((p) => [p.type, p.value]),
-  );
-  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
-}
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body, null, 2), {
@@ -168,7 +153,7 @@ async function handle(request, env) {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
-    return json({ ...schedule, dataSource: data.source, database: data.dbStatus }, 200, noStore);
+    return json({ ...schedule, dataSource: data.source, database: data.dbStatus, changesWindow: changesWindow(env) }, 200, noStore);
   }
 
   // POST {text} → AI reads a message and proposes changes for staff to confirm.
@@ -181,8 +166,10 @@ async function handle(request, env) {
     if (!(await allowLlmCall(request, env))) return json({ error: "Too many requests. Wait a minute and try again." }, 429);
 
     try {
-      const today = DATE_RE.test(body.today ?? "") ? body.today : localNow(env.TIMEZONE).date;
-      return json(await parseChanges(text, await loadData(env), today, env));
+      // "Today" comes from the server's clock, not the browser, so the cutoff can't be dodged.
+      const win = changesWindow(env);
+      const result = await parseChanges(text, await loadData(env), win.today, env);
+      return json({ ...applyCutoff(result, win), window: win });
     } catch (err) {
       console.error("Parse failed:", err.message);
       if (err instanceof LlmError) {
