@@ -152,3 +152,22 @@ test("Google's real invalid-key reply (error wrapped in a list) is explained", a
     /API key isn't valid\. Check the GOOGLE_MAPS_API_KEY secret\. Google said: "API key not valid/,
   );
 });
+
+test("more than 10 places are split into requests of at most 100 routes", async () => {
+  const many = Array.from({ length: 11 }, (_, i) => ({ id: i ? `s${i}` : "base", name: `P${i}`, address: `${i} Main St` }));
+  const sizes = [];
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    sizes.push([body.origins.length, body.destinations.length]);
+    const out = [];
+    body.origins.forEach((_, i) => body.destinations.forEach((_, j) =>
+      out.push({ originIndex: i, destinationIndex: j, duration: "300s", condition: "ROUTE_EXISTS" })));
+    return json(out);
+  };
+  const r = await fetchDrivingMatrix({ GOOGLE_MAPS_API_KEY: "k" }, many, new Date());
+  assert.deepEqual(sizes, [[9, 11], [2, 11]]);
+  for (const [o, d] of sizes) assert.ok(o * d <= 100);
+  assert.equal(r.rows.length, 11 * 10, "every pair in both directions, none missing or duplicated");
+  assert.equal(new Set(r.rows.map((x) => `${x.from_id}>${x.to_id}`)).size, 110);
+  assert.ok(r.rows.some((x) => x.from_id === "s10" && x.to_id === "base"), "origins in the second batch are mapped correctly");
+});

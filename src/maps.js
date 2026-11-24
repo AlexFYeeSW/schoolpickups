@@ -72,16 +72,11 @@ export function toMinutesFromDuration(d) {
   return m ? Math.max(1, Math.ceil(Number(m[1]) / 60)) : null;
 }
 
-/**
- * Ask Google for driving minutes between every pair of places.
- * places: [{ id, address }]. Returns { rows: [{from_id,to_id,minutes}], problems: [] }.
- */
-export async function fetchDrivingMatrix(env, places, departure) {
-  const key = mapsKey(env);
-  if (!key) throw new MapsError("GOOGLE_MAPS_API_KEY isn't set on the Worker.", 503);
-  if (places.length < 2) throw new MapsError("Need at least the center and one school with an address.", 400);
-  if (places.length * places.length > 100) throw new MapsError("Too many places for one traffic-aware request (max 10).", 400);
+// A traffic-aware matrix request may hold at most 100 routes (origins x destinations).
+const MAX_ROUTES_PER_REQUEST = 100;
 
+/** One computeRouteMatrix call. Returns Google's list of route results. */
+async function requestMatrix(key, origins, destinations, departure) {
   let res;
   try {
     res = await fetch(MATRIX_URL, {
@@ -92,8 +87,8 @@ export async function fetchDrivingMatrix(env, places, departure) {
         "X-Goog-FieldMask": "originIndex,destinationIndex,duration,condition,status",
       },
       body: JSON.stringify({
-        origins: places.map((p) => ({ waypoint: { address: p.address } })),
-        destinations: places.map((p) => ({ waypoint: { address: p.address } })),
+        origins: origins.map((p) => ({ waypoint: { address: p.address } })),
+        destinations: destinations.map((p) => ({ waypoint: { address: p.address } })),
         travelMode: "DRIVE",
         routingPreference: "TRAFFIC_AWARE_OPTIMAL",
         departureTime: departure.toISOString(),
@@ -121,19 +116,37 @@ export async function fetchDrivingMatrix(env, places, departure) {
     console.error(`Google Routes -> ${status} ${reason || ""}: ${msg}`);
     throw new MapsError(friendly(status, msg, reason), status);
   }
+  return Array.isArray(body) ? body : [];
+}
 
+/**
+ * Ask Google for driving minutes between every pair of places, splitting the
+ * work into several requests when there are more than 10 places.
+ * places: [{ id, name, address }]. Returns { rows: [{from_id,to_id,minutes}], problems: [] }.
+ */
+export async function fetchDrivingMatrix(env, places, departure) {
+  const key = mapsKey(env);
+  if (!key) throw new MapsError("GOOGLE_MAPS_API_KEY isn't set on the Worker.", 503);
+  if (places.length < 2) throw new MapsError("Need at least the center and one school with an address.", 400);
+  if (places.length > MAX_ROUTES_PER_REQUEST) throw new MapsError(`Too many places (max ${MAX_ROUTES_PER_REQUEST}).`, 400);
+
+  const originsPerRequest = Math.floor(MAX_ROUTES_PER_REQUEST / places.length);
   const rows = [];
   const problems = [];
-  for (const el of Array.isArray(body) ? body : []) {
-    const from = places[el.originIndex];
-    const to = places[el.destinationIndex];
-    if (!from || !to || from.id === to.id) continue;
-    const minutes = toMinutesFromDuration(el.duration);
-    if (el.status?.code || el.condition === "ROUTE_NOT_FOUND" || minutes == null) {
-      problems.push(`${from.name} → ${to.name}: ${el.status?.message || el.condition || "no route found"}`);
-      continue;
+  for (let start = 0; start < places.length; start += originsPerRequest) {
+    const origins = places.slice(start, start + originsPerRequest);
+    const results = await requestMatrix(key, origins, places, departure);
+    for (const el of results) {
+      const from = origins[el.originIndex];
+      const to = places[el.destinationIndex];
+      if (!from || !to || from.id === to.id) continue;
+      const minutes = toMinutesFromDuration(el.duration);
+      if (el.status?.code || el.condition === "ROUTE_NOT_FOUND" || minutes == null) {
+        problems.push(`${from.name} → ${to.name}: ${el.status?.message || el.condition || "no route found"}`);
+        continue;
+      }
+      rows.push({ from_id: from.id, to_id: to.id, minutes });
     }
-    rows.push({ from_id: from.id, to_id: to.id, minutes });
   }
   return { rows, problems };
 }

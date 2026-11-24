@@ -89,8 +89,10 @@ the same situation; preview from the command line with
 ## Supabase (database)
 
 1. In the Supabase SQL Editor, run `supabase/schema.sql` (creates the tables),
-   then optionally `supabase/seed.sql` (loads the made-up sample data). Both
-   are safe to run more than once.
+   then optionally `supabase/seed.sql` (loads the made-up sample data) and
+   `supabase/schools-west-covina.sql` (10 real West Covina public schools with
+   addresses; dismissal times must be filled in from each school's bell
+   schedule). All are safe to run more than once.
 2. In Cloudflare: Worker → Settings → Variables and Secrets, add as **Secret**:
    - `SUPABASE_URL`: e.g. `https://<project>.supabase.co`
    - `SUPABASE_SECRET_KEY`: Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`)
